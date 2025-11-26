@@ -1,0 +1,45 @@
+[package]
+name = "minecraft-resourcespack-editor"
+version = "0.1.0"
+description = "Minecraft Resourcespack Editor"
+authors = ["Little_100"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "minecraft_resourcespack_editor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2.0"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = "2.2"
+walkdir = "2"
+image = "0.25"
+base64 = "0.22"
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", optional = true }
+tower = { version = "0.5", optional = true }
+tower-http = { version = "0.6", features = ["fs", "cors"], optional = true }
+font-kit = "0.14"
+window-vibrancy = "0.5"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
+
+[features]
+default = ["web-server"]
+web-server = ["axum", "tower", "tower-http"]
+

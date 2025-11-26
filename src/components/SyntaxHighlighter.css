@@ -1,0 +1,81 @@
+.syntax-highlighter {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.5;
+  white-space: pre;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 2;
+}
+
+.token-string {
+  color: #a31515;
+}
+
+.token-number {
+  color: #098658;
+}
+
+.token-boolean {
+  color: #0000ff;
+}
+
+.token-null {
+  color: #0000ff;
+}
+
+.token-key {
+  color: #0451a5;
+}
+
+.token-punctuation {
+  color: #333333;
+}
+
+.token-error {
+  color: #cd3131;
+  text-decoration: wavy underline;
+  text-decoration-color: #cd3131;
+  background: rgba(255, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .token-string {
+  color: #ce9178;
+}
+
+[data-theme="dark"] .token-number {
+  color: #b5cea8;
+}
+
+[data-theme="dark"] .token-boolean {
+  color: #569cd6;
+}
+
+[data-theme="dark"] .token-null {
+  color: #569cd6;
+}
+
+[data-theme="dark"] .token-key {
+  color: #9cdcfe;
+}
+
+[data-theme="dark"] .token-punctuation {
+  color: #d4d4d4;
+}
+
+[data-theme="dark"] .token-error {
+  color: #f48771;
+  text-decoration: wavy underline;
+  text-decoration-color: #f48771;
+  background: rgba(244, 135, 113, 0.1);
+}
+
+.token-text {
+  color: transparent;
+}
