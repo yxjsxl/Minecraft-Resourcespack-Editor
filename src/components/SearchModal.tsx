@@ -236,6 +236,11 @@ export default function SearchModal({
                         <div className="result-path">
                           {highlightText(fileName, result.match_start, result.match_end)}
                         </div>
+                        {result.translation && (
+                          <div className="result-translation">
+                            {result.translation}
+                          </div>
+                        )}
                         <div className="result-full-path">{result.file_path}</div>
                       </div>
                     );

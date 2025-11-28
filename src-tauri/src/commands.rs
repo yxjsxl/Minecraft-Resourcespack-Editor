@@ -1195,6 +1195,7 @@ pub struct SearchResult {
     pub line_content: Option<String>,
     pub match_start: Option<usize>,
     pub match_end: Option<usize>,
+    pub translation: Option<String>,
 }
 
 /// 搜索响应
@@ -1222,6 +1223,9 @@ pub async fn search_files(
     
     drop(pack_path);
     
+    // 加载语言映射表用于中文搜索
+    let language_map = load_language_map_sync(&base_path);
+    
     // 编译正则表达式或准备搜索模式
     let regex_pattern = if use_regex {
         Some(Regex::new(&query).map_err(|e| format!("Invalid regex pattern: {}", e))?)
@@ -1243,6 +1247,7 @@ pub async fn search_files(
                 case_sensitive,
                 use_regex,
                 regex_pattern.as_ref(),
+                &language_map,
             ).ok()
         })
         .flatten()
@@ -1295,6 +1300,142 @@ fn collect_searchable_files(base_path: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 
+/// 同步加载语言映射表
+fn load_language_map_sync(base_path: &Path) -> std::collections::HashMap<String, String> {
+    let map_file = base_path.join(".little100").join("map.json");
+    
+    if !map_file.exists() {
+        return std::collections::HashMap::new();
+    }
+    
+    match std::fs::read_to_string(&map_file) {
+        Ok(content) => {
+            serde_json::from_str(&content).unwrap_or_default()
+        }
+        Err(_) => std::collections::HashMap::new(),
+    }
+}
+
+/// 获取文件的中文翻译
+fn get_file_translation(
+    file_path: &Path,
+    base_path: &Path,
+    language_map: &std::collections::HashMap<String, String>,
+) -> Option<String> {
+    if language_map.is_empty() {
+        return None;
+    }
+    
+    let relative_path = file_path
+        .strip_prefix(base_path)
+        .unwrap_or(file_path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    
+    // 移除文件扩展名
+    let path_without_ext = relative_path.rsplit_once('.').map(|(p, _)| p).unwrap_or(&relative_path);
+    
+    // 检查是否是 block 路径
+    if path_without_ext.contains("assets/minecraft/textures/block/") {
+        if let Some(block_name) = path_without_ext.strip_prefix("assets/minecraft/textures/block/") {
+            let map_key = format!("block.minecraft.{}", block_name.replace('/', "."));
+            if let Some(translation) = language_map.get(&map_key) {
+                return Some(translation.clone());
+            }
+        }
+    }
+    // 检查是否是 item 路径
+    else if path_without_ext.contains("assets/minecraft/textures/item/") {
+        if let Some(item_name) = path_without_ext.strip_prefix("assets/minecraft/textures/item/") {
+            let map_key = format!("item.minecraft.{}", item_name.replace('/', "."));
+            if let Some(translation) = language_map.get(&map_key) {
+                return Some(translation.clone());
+            }
+        }
+    }
+    
+    None
+}
+
+/// 检查文件路径是否匹配中文查询
+fn check_chinese_match(
+    file_path: &Path,
+    base_path: &Path,
+    query: &str,
+    case_sensitive: bool,
+    language_map: &std::collections::HashMap<String, String>,
+) -> bool {
+    // 如果映射表为空,直接返回
+    if language_map.is_empty() {
+        return false;
+    }
+    
+    // 只在查询包含中文时才进行映射搜索
+    if !query.chars().any(|c| (c as u32) > 0x4E00 && (c as u32) < 0x9FA5) {
+        return false;
+    }
+    
+    let relative_path = file_path
+        .strip_prefix(base_path)
+        .unwrap_or(file_path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    
+    // 移除文件扩展名
+    let path_without_ext = relative_path.rsplit_once('.').map(|(p, _)| p).unwrap_or(&relative_path);
+    
+    // 检查是否是 block 或 item 路径
+    if path_without_ext.contains("assets/minecraft/textures/block/") {
+        // 提取 block 名称,如 assets/minecraft/textures/block/cherry_log -> cherry_log
+        if let Some(block_name) = path_without_ext.strip_prefix("assets/minecraft/textures/block/") {
+            let map_key = format!("block.minecraft.{}", block_name.replace('/', "."));
+            
+            if let Some(translation) = language_map.get(&map_key) {
+                let search_translation = if case_sensitive {
+                    translation.clone()
+                } else {
+                    translation.to_lowercase()
+                };
+                
+                let search_query = if case_sensitive {
+                    query.to_string()
+                } else {
+                    query.to_lowercase()
+                };
+                
+                if search_translation.contains(&search_query) {
+                    return true;
+                }
+            }
+        }
+    } else if path_without_ext.contains("assets/minecraft/textures/item/") {
+        // 提取 item 名称,如 assets/minecraft/textures/item/diamond -> diamond
+        if let Some(item_name) = path_without_ext.strip_prefix("assets/minecraft/textures/item/") {
+            let map_key = format!("item.minecraft.{}", item_name.replace('/', "."));
+            
+            if let Some(translation) = language_map.get(&map_key) {
+                let search_translation = if case_sensitive {
+                    translation.clone()
+                } else {
+                    translation.to_lowercase()
+                };
+                
+                let search_query = if case_sensitive {
+                    query.to_string()
+                } else {
+                    query.to_lowercase()
+                };
+                
+                if search_translation.contains(&search_query) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
 /// 在单个文件中搜索
 fn search_in_file(
     file_path: &Path,
@@ -1303,6 +1444,7 @@ fn search_in_file(
     case_sensitive: bool,
     use_regex: bool,
     regex_pattern: Option<&Regex>,
+    language_map: &std::collections::HashMap<String, String>,
 ) -> Result<Vec<SearchResult>, String> {
     let mut results = Vec::new();
     
@@ -1326,12 +1468,18 @@ fn search_in_file(
             false
         }
     } else {
-        if case_sensitive {
+        let direct_match = if case_sensitive {
             file_name.contains(query)
         } else {
             file_name.to_lowercase().contains(&query.to_lowercase())
-        }
+        };
+        
+        // 如果直接匹配失败,尝试通过中文映射匹配
+        direct_match || check_chinese_match(file_path, base_path, query, case_sensitive, language_map)
     };
+    
+    // 获取文件的中文翻译(如果存在)
+    let translation = get_file_translation(file_path, base_path, language_map);
     
     if filename_match {
         let (match_start, match_end) = if use_regex {
@@ -1370,6 +1518,7 @@ fn search_in_file(
             line_content: None,
             match_start,
             match_end,
+            translation: translation.clone(),
         });
     }
     
@@ -1439,6 +1588,7 @@ fn search_in_file(
                             line_content: Some(line.to_string()),
                             match_start,
                             match_end,
+                            translation: None, // 内容匹配不需要翻译
                         });
                     }
                 }

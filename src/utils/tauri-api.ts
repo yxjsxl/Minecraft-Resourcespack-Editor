@@ -294,6 +294,7 @@ export interface SearchResult {
   line_content?: string;
   match_start?: number;
   match_end?: number;
+  translation?: string;
 }
 
 export interface SearchResponse {
