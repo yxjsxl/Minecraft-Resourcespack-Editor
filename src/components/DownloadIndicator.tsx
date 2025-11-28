@@ -32,6 +32,7 @@ interface DownloadIndicatorProps {
 export default function DownloadIndicator({ onShowDetails }: DownloadIndicatorProps) {
   const [tasks, setTasks] = useState<DownloadTask[]>([]);
   const [isVisible, setIsVisible] = useState(false);
+  const [isSlideOut, setIsSlideOut] = useState(false);
 
   // 加载所有任务
   const loadTasks = async () => {
@@ -66,6 +67,8 @@ export default function DownloadIndicator({ onShowDetails }: DownloadIndicatorPr
     // 监听任务创建
     const unlistenCreated = listen<string>('download-task-created', () => {
       loadTasks();
+      // 重置滑出状态
+      setIsSlideOut(false);
     });
 
     // 监听任务取消
@@ -87,12 +90,27 @@ export default function DownloadIndicator({ onShowDetails }: DownloadIndicatorPr
   }, []);
 
   // 计算活动任务数
-  const activeTasks = tasks.filter(t => 
+  const activeTasks = tasks.filter(t =>
     t.status === 'downloading' || t.status === 'pending'
   );
 
   const hasActiveTasks = activeTasks.length > 0;
   const activeTask = activeTasks[0];
+
+  // 检测所有任务完成,3秒后滑出
+  useEffect(() => {
+    if (tasks.length > 0 && !hasActiveTasks && !isSlideOut) {
+      // 所有任务都已完成,3秒后滑出
+      const timer = setTimeout(() => {
+        setIsSlideOut(true);
+        setTimeout(() => {
+          setIsVisible(false);
+        }, 500);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [tasks, hasActiveTasks, isSlideOut]);
 
   // 格式化速度
   const formatSpeed = (bytesPerSecond: number): string => {
@@ -112,7 +130,10 @@ export default function DownloadIndicator({ onShowDetails }: DownloadIndicatorPr
   if (!isVisible) return null;
 
   return (
-    <div className="download-indicator" onClick={onShowDetails}>
+    <div
+      className={`download-indicator ${isSlideOut ? 'slide-out' : ''}`}
+      onClick={onShowDetails}
+    >
       <div className="indicator-icon">
         {hasActiveTasks ? (
           <>
