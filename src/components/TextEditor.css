@@ -172,6 +172,11 @@ body.acrylic-mode .editor-content-wrapper {
 .editor-textarea.with-highlight {
   color: transparent;
   caret-color: var(--text-primary);
+  -webkit-text-fill-color: transparent;
+}
+
+.editor-textarea:not(.with-highlight) {
+  color: var(--text-primary);
 }
 
 .editor-textarea::-webkit-scrollbar {

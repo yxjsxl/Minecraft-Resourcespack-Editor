@@ -97,7 +97,7 @@ export class BatchDrawOptimizer {
     
     const duration = performance.now() - startTime;
     if (duration > 16) {
-      console.log(`[GPU批量绘制] ️ 处理${ops.length}个操作耗时: ${duration.toFixed(2)}ms`);
+      console.log(`[GPU批量绘制] 处理${ops.length}个操作耗时: ${duration.toFixed(2)}ms`);
     }
     
     this.isProcessing = false;

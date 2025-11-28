@@ -233,42 +233,48 @@ body.acrylic-enabled .tree-item.folder {
   width: 1px;
   height: 100%;
   top: 0;
-  background-color: var(--border-color);
-  opacity: 0.5;
+  background-color: rgba(128, 128, 128, 0.3);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .tree-connector {
   position: absolute;
   width: 14px;
   height: 50%;
-  border-left: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
+  border-left: 1px solid rgba(128, 128, 128, 0.3);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
   top: 0;
-  opacity: 0.5;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .tree-connector.last {
   height: 50%;
-  border-left: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
+  border-left: 1px solid rgba(128, 128, 128, 0.3);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
   border-bottom-left-radius: 0;
-  opacity: 0.5;
 }
 
 [data-theme="dark"] .tree-vline {
-  background-color: var(--text-tertiary);
-  opacity: 0.4;
+  background-color: rgba(180, 180, 180, 0.3);
 }
 
 [data-theme="dark"] .tree-connector {
-  border-left-color: var(--text-tertiary);
-  border-bottom-color: var(--text-tertiary);
-  opacity: 0.4;
+  border-left-color: rgba(180, 180, 180, 0.3);
+  border-bottom-color: rgba(180, 180, 180, 0.3);
 }
 
 [data-theme="dark"] .tree-connector.last {
-  border-left-color: var(--text-tertiary);
-  border-bottom-color: var(--text-tertiary);
+  border-left-color: rgba(180, 180, 180, 0.3);
+  border-bottom-color: rgba(180, 180, 180, 0.3);
+}
+
+.folder-icon,
+.file-icon,
+.item-name {
+  position: relative;
+  z-index: 1;
 }
 
 .tree-item:hover {

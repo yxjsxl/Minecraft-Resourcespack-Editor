@@ -130,6 +130,8 @@ const tokenizeJSON = (code: string): Token[] => {
 };
 
 export default function SyntaxHighlighter({ code, language, scrollTop = 0, scrollLeft = 0 }: SyntaxHighlighterProps) {
+  const MAX_TOKENS = 100000;
+  
   const tokens = useMemo(() => {
     if (language !== 'json') {
       return null;
@@ -140,6 +142,13 @@ export default function SyntaxHighlighter({ code, language, scrollTop = 0, scrol
       const result = tokenizeJSON(code);
       const duration = performance.now() - startTime;
       console.log(`[性能-语法高亮]  计算tokens完成, 耗时: ${duration.toFixed(2)}ms, tokens数量: ${result.length}`);
+      
+      if (result.length > MAX_TOKENS) {
+        console.warn(`[性能-语法高亮] ⚠️ Token数量(${result.length})超过限制(${MAX_TOKENS}),已禁用语法高亮以提升性能`);
+        console.warn(`[性能-语法高亮]  提示: 渲染${result.length}个DOM元素会导致严重卡顿,建议编辑较小的文件或使用纯文本模式`);
+        return null;
+      }
+      
       return result;
     } catch (error) {
       console.error('[性能-语法高亮]  错误:', error);
@@ -151,7 +160,7 @@ export default function SyntaxHighlighter({ code, language, scrollTop = 0, scrol
   const tokenElements = useMemo(() => {
     if (!tokens) return null;
     
-    console.log(`[性能-语法高亮] 🔨 渲染${tokens.length}个token元素`);
+    console.log(`[性能-语法高亮]  渲染${tokens.length}个token元素`);
     return tokens.map((token, index) => (
       <span key={index} className={`token-${token.type}`}>
         {token.value}

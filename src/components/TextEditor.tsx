@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import "./TextEditor.css";
-import SyntaxHighlighter from "./SyntaxHighlighter";
+import CanvasSyntaxHighlighter from "./CanvasSyntaxHighlighter";
 import { writeFileContent } from "../utils/tauri-api";
 
 interface TextEditorProps {
@@ -565,14 +565,14 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
         </div>
         <div className="editor-content-wrapper" style={{ fontSize: `${fontSize}px` }}>
           {isJSON && (
-            <div className="syntax-highlight-layer">
-              <SyntaxHighlighter
-                code={text}
-                language="json"
-                scrollTop={scrollTop}
-                scrollLeft={scrollLeft}
-              />
-            </div>
+            <CanvasSyntaxHighlighter
+              code={text}
+              language="json"
+              scrollTop={scrollTop}
+              scrollLeft={scrollLeft}
+              fontSize={fontSize}
+              lineHeight={1.5}
+            />
           )}
           <textarea
             ref={textareaRef}

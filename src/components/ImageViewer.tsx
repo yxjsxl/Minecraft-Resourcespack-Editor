@@ -352,7 +352,7 @@ loadImage();
         
         setZoom((prev) => {
           const newZoom = prev + delta;
-          return Math.min(Math.max(newZoom, 1), 5000);
+          return Math.min(Math.max(newZoom, 1), 10000);
         });
       }
     };
@@ -370,7 +370,7 @@ loadImage();
   }, []);
 
   const handleZoomIn = () => {
-    setZoom((prev) => Math.min(prev + 25, 5000));
+    setZoom((prev) => Math.min(prev + 25, 10000));
   };
 
   const handleZoomOut = () => {
@@ -930,7 +930,7 @@ loadImage();
     
     ctx.globalCompositeOperation = 'source-over';
     
-    if (isLargeImage && ops.length > 5000) {
+    if (isLargeImage && ops.length > 10000) {
       const targetOps = 1500;
       const sampleRate = Math.max(1, Math.floor(ops.length / targetOps));
       

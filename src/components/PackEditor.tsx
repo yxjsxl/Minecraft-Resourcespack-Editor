@@ -41,6 +41,7 @@ interface OpenTab {
   content: string;
   isDirty: boolean;
   canvasData?: string;
+  forceTextMode?: boolean;
 }
 
 interface ImageInfo {
@@ -512,7 +513,7 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     }
   }, []);
 
-  const openFileInTab = useCallback(async (filePath: string) => {
+  const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolean = false) => {
     console.log(`[性能-打开文件]  开始: ${filePath}`);
     const startTime = performance.now();
     
@@ -521,6 +522,26 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     if (existingTabIndex >= 0) {
       const duration = (performance.now() - startTime).toFixed(2);
       console.log(`[性能-打开文件]  切换到已打开的标签! 耗时: ${duration}ms`);
+      
+      if (forceTextMode && !openTabs[existingTabIndex].forceTextMode) {
+        const newTabs = [...openTabs];
+        newTabs[existingTabIndex] = {
+          ...newTabs[existingTabIndex],
+          forceTextMode: true
+        };
+        
+        if (!newTabs[existingTabIndex].content) {
+          try {
+            const content = await readFileContent(filePath);
+            newTabs[existingTabIndex].content = content;
+          } catch (error) {
+            console.error('加载文件内容失败:', error);
+          }
+        }
+        
+        setOpenTabs(newTabs);
+      }
+      
       setActiveTabIndex(existingTabIndex);
       setCurrentFileHasChanges(false);
       
@@ -531,12 +552,17 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     const ext = filePath.split('.').pop()?.toLowerCase();
     const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext || '');
     
-    console.log(`[性能-打开文件] 文件类型: ${isImage ? '图片' : '文本'}`);
+    console.log(`[性能-打开文件] 文件类型: ${isImage ? '图片' : '文本'}, 强制文本模式: ${forceTextMode}`);
     
     let content = '';
-    if (!isImage) {
+    if (!isImage || forceTextMode) {
       const loadStart = performance.now();
-      content = await loadFileContent(filePath);
+      try {
+        content = await readFileContent(filePath);
+      } catch (error) {
+        console.error('加载文件内容失败:', error);
+        content = '';
+      }
       const loadDuration = (performance.now() - loadStart).toFixed(2);
       console.log(`[性能-打开文件]   ├─ 文本内容加载耗时: ${loadDuration}ms`);
     }
@@ -548,13 +574,14 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
       path: filePath,
       content: content,
       isDirty: false,
+      forceTextMode: forceTextMode,
     };
     
     setOpenTabs([...openTabs, newTab]);
     setActiveTabIndex(openTabs.length);
     setCurrentFileHasChanges(false);
     
-    if (!isImage) {
+    if (!isImage || forceTextMode) {
       setImageInfo(null);
     }
   }, [openTabs, loadFileContent]);
@@ -762,7 +789,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
     return [];
   }
   
-  console.log(`[性能-文件夹] 📂 开始加载: ${folderPath}`);
+  console.log(`[性能-文件夹]  开始加载: ${folderPath}`);
   const startTime = performance.now();
   
   // 标记为正在加载
@@ -797,7 +824,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
 
   const toggleFolder = useCallback(async (path: string, node: FileTreeNode) => {
     const childCount = node.children?.length || 0;
-    console.log(`[性能-文件夹展开] 📂 点击文件夹: ${path}, 当前展开状态: ${expandedFolders.has(path)}, loaded: ${node.loaded}, children: ${childCount}`);
+    console.log(`[性能-文件夹展开]  点击文件夹: ${path}, 当前展开状态: ${expandedFolders.has(path)}, loaded: ${node.loaded}, children: ${childCount}`);
     
     const startTime = performance.now();
     const newExpanded = new Set(expandedFolders);
@@ -932,6 +959,24 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
       );
     }
 
+    // 检查是否强制文本模式
+    const currentTab = openTabs[activeTabIndex];
+    if (currentTab?.forceTextMode) {
+      return (
+        <TextEditor
+          content={fileContent}
+          filePath={selectedFile}
+          onChange={(content) => {
+            updateTabContent(content);
+          }}
+          onSave={() => {
+            markTabAsSaved();
+          }}
+          readOnly={false}
+        />
+      );
+    }
+
     return (
       <div className="unsupported-file">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -940,6 +985,13 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
         </svg>
         <p>不支持的文件类型</p>
         <span className="file-info">{fileName}</span>
+        <button
+          className="btn-primary"
+          onClick={() => openFileInTab(selectedFile, true)}
+          style={{ marginTop: '1rem' }}
+        >
+          用文本编辑器打开
+        </button>
       </div>
     );
   };
@@ -1378,6 +1430,13 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
                 key={tab.path}
                 className={`editor-tab ${index === activeTabIndex ? 'active' : ''}`}
                 onClick={() => setActiveTabIndex(index)}
+                onMouseDown={(e) => {
+                  // 鼠标中键(滚轮按钮)关闭标签
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    closeTab(index);
+                  }
+                }}
               >
                 <span>{tab.isDirty ? '● ' : ''}{tab.path.split('/').pop() || '未命名'}</span>
                 <button className="tab-close" onClick={(e) => closeTab(index, e)}>
