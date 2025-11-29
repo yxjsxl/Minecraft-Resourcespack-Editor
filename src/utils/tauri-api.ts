@@ -134,6 +134,16 @@ export async function saveFileDialog(): Promise<string | null> {
   return selected as string | null;
 }
 
+// 选择输出文件夹
+export async function selectOutputFolder(): Promise<string | null> {
+  const selected = await open({
+    directory: true,
+    multiple: false,
+  });
+
+  return selected as string | null;
+}
+
 export interface MinecraftItem {
   id: string;
   name: string;

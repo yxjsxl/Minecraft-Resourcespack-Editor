@@ -1737,3 +1737,83 @@ pub async fn download_minecraft_sounds(
     });
     Ok(task_id)
 }
+
+/// 读取pack.mcmeta文件内容
+#[tauri::command]
+pub async fn read_pack_mcmeta(path: String, is_zip: bool) -> Result<serde_json::Value, String> {
+    use std::fs::File;
+    use std::io::Read;
+    use zip::ZipArchive;
+
+    if is_zip {
+        // 从ZIP文件中读取pack.mcmeta
+        let file = File::open(&path)
+            .map_err(|e| format!("无法打开ZIP文件: {}", e))?;
+        
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| format!("无法读取ZIP文件: {}", e))?;
+        
+        // 查找pack.mcmeta文件
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)
+                .map_err(|e| format!("无法读取ZIP内容: {}", e))?;
+            
+            let file_name = file.name().to_string();
+            if file_name == "pack.mcmeta" || file_name.ends_with("/pack.mcmeta") {
+                let mut contents = String::new();
+                file.read_to_string(&mut contents)
+                    .map_err(|e| format!("无法读取pack.mcmeta: {}", e))?;
+                
+                // 解析
+                let json: serde_json::Value = serde_json::from_str(&contents)
+                    .map_err(|e| format!("无法解析pack.mcmeta JSON: {}", e))?;
+                
+                return json.get("pack")
+                    .ok_or_else(|| "pack.mcmeta中缺少pack字段".to_string())
+                    .map(|v| v.clone());
+            }
+        }
+        
+        Err("ZIP文件中未找到pack.mcmeta".to_string())
+    } else {
+        // 从文件夹中读取pack.mcmeta
+        let mcmeta_path = Path::new(&path).join("pack.mcmeta");
+        
+        if !mcmeta_path.exists() {
+            return Err("文件夹中未找到pack.mcmeta".to_string());
+        }
+        
+        let mut file = File::open(&mcmeta_path)
+            .map_err(|e| format!("无法打开pack.mcmeta: {}", e))?;
+        
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)
+            .map_err(|e| format!("无法读取pack.mcmeta: {}", e))?;
+        
+        let json: serde_json::Value = serde_json::from_str(&contents)
+            .map_err(|e| format!("无法解析pack.mcmeta JSON: {}", e))?;
+        
+        json.get("pack")
+            .ok_or_else(|| "pack.mcmeta中缺少pack字段".to_string())
+            .map(|v| v.clone())
+    }
+}
+
+/// 获取支持的版本列表
+#[tauri::command]
+pub async fn get_supported_versions() -> Result<Vec<(u32, String)>, String> {
+    Ok(crate::version_converter::get_supported_versions())
+}
+
+/// 转换材质包版本
+#[tauri::command]
+pub async fn convert_pack_version(
+    input_path: String,
+    output_path: String,
+    target_version: String,
+) -> Result<String, String> {
+    let input = Path::new(&input_path);
+    let output = Path::new(&output_path);
+    
+    crate::version_converter::convert_pack_version(input, output, &target_version)
+}

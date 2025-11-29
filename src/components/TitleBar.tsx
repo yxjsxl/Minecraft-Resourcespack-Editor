@@ -1,8 +1,10 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import './TitleBar.css';
 import logoImg from '../assets/logo.png';
+import creditsContent from '../../credits.md?raw';
 
 interface TitleBarProps {
   packSize?: number;      // 材质包大小
@@ -14,6 +16,7 @@ interface TitleBarProps {
 const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode = false }: TitleBarProps) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [appWindow, setAppWindow] = useState<any>(null);
+  const [showCredits, setShowCredits] = useState(false);
 
   useEffect(() => {
     // 延迟获取window对象 确保始化
@@ -35,6 +38,53 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
       <path fillRule="evenodd" clipRule="evenodd" d="M9.09447 4.74918C8.41606 4.03243 8 3.0648 8 2H10C10 3.10457 10.8954 4 12 4C13.1046 4 14 3.10457 14 2H16C16 3.0648 15.5839 4.03243 14.9055 4.74918C16.1782 5.45491 17.1673 6.6099 17.6586 8H19C19.5523 8 20 8.44772 20 9C20 9.55229 19.5523 10 19 10H18V12H19C19.5523 12 20 12.4477 20 13C20 13.5523 19.5523 14 19 14H18V16H19C19.5523 16 20 16.4477 20 17C20 17.5523 19.5523 18 19 18H17.6586C16.8349 20.3304 14.6124 22 12 22C9.38756 22 7.16508 20.3304 6.34141 18H5C4.44772 18 4 17.5523 4 17C4 16.4477 4.44772 16 5 16H6V14H5C4.44772 14 4 13.5523 4 13C4 12.4477 4.44772 12 5 12H6V10H5C4.44772 10 4 9.55229 4 9C4 8.44772 4.44772 8 5 8H6.34141C6.83274 6.6099 7.82181 5.45491 9.09447 4.74918ZM8 16V10C8 7.79086 9.79086 6 12 6C14.2091 6 16 7.79086 16 10V16C16 18.2091 14.2091 20 12 20C9.79086 20 8 18.2091 8 16Z" fill="currentColor"/>
     </svg>
   );
+
+  const CreditsIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" width="20" height="20">
+      <path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
+    </svg>
+  );
+
+  // 解析credits.md内容
+  const parseCredits = () => {
+    const lines = creditsContent.split('\n');
+    const contributors: Array<{name: string, link?: string, qq?: string, avatar?: string, role?: string}> = [];
+    let currentContributor: any = null;
+
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      
+      if (line.startsWith('# ')) {
+        if (currentContributor) {
+          contributors.push(currentContributor);
+        }
+        const currentRole = line.substring(2).trim();
+        currentContributor = { role: currentRole };
+      } else if (trimmedLine.startsWith('- [') && trimmedLine.includes('](')) {
+        const match = trimmedLine.match(/\[([^\]]+)\]\(([^)]+)\)/);
+        if (match && currentContributor) {
+          currentContributor.name = match[1];
+          currentContributor.link = match[2];
+        }
+      } else if (trimmedLine.startsWith('- QQ:')) {
+        const qq = trimmedLine.split('QQ:')[1]?.trim();
+        if (qq && currentContributor) {
+          currentContributor.qq = qq;
+        }
+      } else if (trimmedLine.startsWith('- avatar:')) {
+        const avatar = trimmedLine.split('avatar:')[1]?.trim();
+        if (avatar && currentContributor) {
+          currentContributor.avatar = avatar;
+        }
+      }
+    });
+
+    if (currentContributor) {
+      contributors.push(currentContributor);
+    }
+
+    return contributors;
+  };
 
   // 格式化文件大小
   const formatSize = (bytes: number): string => {
@@ -172,6 +222,13 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
       )}
       
       <div className="titlebar-controls">
+        <button
+          className="titlebar-button credits"
+          onClick={() => setShowCredits(true)}
+          title="鸣谢"
+        >
+          <CreditsIcon />
+        </button>
         {debugMode && (
           <button
             className="titlebar-button debug"
@@ -216,6 +273,49 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
           </svg>
         </button>
       </div>
+
+      {/* 使用 Portal 将鸣谢弹窗渲染到 body */}
+      {showCredits && createPortal(
+        <div className="credits-overlay" onClick={() => setShowCredits(false)}>
+          <div className="credits-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="credits-header">
+              <h2>鸣谢</h2>
+              <button className="credits-close" onClick={() => setShowCredits(false)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M2 2 L14 14 M14 2 L2 14" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </button>
+            </div>
+            <div className="credits-content">
+              {parseCredits().map((contributor, index) => (
+                <div
+                  key={index}
+                  className={`contributor-card ${contributor.link ? 'clickable' : ''}`}
+                  onClick={() => {
+                    if (contributor.link) {
+                      window.open(contributor.link, '_blank');
+                    }
+                  }}
+                >
+                  <div className="contributor-header">
+                    {contributor.avatar && (
+                      <img src={contributor.avatar} alt={contributor.name} className="contributor-avatar" />
+                    )}
+                    <div className="contributor-info">
+                      <h3 className="contributor-role">{contributor.role}</h3>
+                      <span className="contributor-name">{contributor.name}</span>
+                      {contributor.qq && (
+                        <p className="contributor-qq">QQ: {contributor.qq}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

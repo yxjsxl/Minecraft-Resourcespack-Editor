@@ -7,6 +7,7 @@ mod history_manager;
 mod version_downloader;
 mod preloader;
 mod download_manager;
+mod version_converter;
 
 #[cfg(feature = "web-server")]
 mod web_server;
@@ -138,6 +139,9 @@ pub fn run() {
         download_manager::cancel_download_task,
         download_manager::delete_download_task,
         download_manager::clear_completed_tasks,
+        read_pack_mcmeta,
+        get_supported_versions,
+        convert_pack_version,
         history_manager::save_file_history,
         history_manager::load_file_history,
         history_manager::get_history_stats,

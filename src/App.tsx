@@ -1,4 +1,5 @@
 import CreatePackModal from "./components/CreatePackModal";
+import VersionConverterModal from "./components/VersionConverterModal";
 import TitleBar from "./components/TitleBar";
 import PackEditor from "./components/PackEditor";
 import { useState, useEffect } from "react";
@@ -49,6 +50,9 @@ const ZipIcon = () => (
 const MergeIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M6 21V9a9 9 0 0 0 9 9"></path></svg>
 );
+const ConvertIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+);
 const CreateIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
 );
@@ -74,6 +78,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showVersionConverter, setShowVersionConverter] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingFolderPath, setPendingFolderPath] = useState<string | null>(null);
@@ -422,6 +427,11 @@ function App() {
             <h3>导入 ZIP 文件</h3>
             <p>从 ZIP 压缩包导入资源包</p>
           </div>
+          <div className="action-card" onClick={() => setShowVersionConverter(true)}>
+            <div className="action-icon"><ConvertIcon /></div>
+            <h3>转换版本</h3>
+            <p>转换资源包到不同的游戏版本</p>
+          </div>
           <div className="action-card">
             <div className="action-icon"><MergeIcon /></div>
             <h3>材质包融合</h3>
@@ -681,6 +691,12 @@ function App() {
             setShowCreateModal(false);
           }}
           templateCacheEnabled={templateCacheEnabled}
+        />
+      )}
+
+      {showVersionConverter && (
+        <VersionConverterModal
+          onClose={() => setShowVersionConverter(false)}
         />
       )}
 
