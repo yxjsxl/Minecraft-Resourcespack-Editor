@@ -45,6 +45,7 @@ async function getGitHubRelease() {
 async function createGiteeRelease(releaseData) {
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({
+      access_token: GITEE_TOKEN,
       tag_name: TAG_NAME,
       name: releaseData.name,
       body: releaseData.body,
