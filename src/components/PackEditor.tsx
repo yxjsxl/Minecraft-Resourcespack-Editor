@@ -18,6 +18,13 @@ import {
   PasteIcon, DeleteIcon, SearchIcon
 } from "./Icons";
 
+import brushIcon from "../assets/brush.svg";
+import pencilIcon from "../assets/pencil.svg";
+import eraserIcon from "../assets/eraser.svg";
+import moveIcon from "../assets/move.svg";
+import penToolIcon from "../assets/pen-tool.svg";
+import coloizeIcon from "../assets/coloize.svg";
+
 interface FileTreeNode {
   name: string;
   path: string;
@@ -1733,7 +1740,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
                 onContextMenu={(e) => handleToolContextMenu(e, 'brush')}
                 title="毛刷笔 (右键调整大小)"
               >
-                <img src="/src/assets/brush.svg" alt="毛刷笔" width="24" height="24" />
+                <img src={brushIcon} alt="毛刷笔" width="24" height="24" />
                 <span>毛刷笔</span>
               </button>
               <button
@@ -1742,7 +1749,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
                 onContextMenu={(e) => handleToolContextMenu(e, 'pencil')}
                 title="铅笔 (右键调整大小)"
               >
-                <img src="/src/assets/pencil.svg" alt="铅笔" width="24" height="24" />
+                <img src={pencilIcon} alt="铅笔" width="24" height="24" />
                 <span>铅笔</span>
               </button>
               <button
@@ -1751,7 +1758,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
                 onContextMenu={(e) => handleToolContextMenu(e, 'eraser')}
                 title="橡皮 (右键调整大小)"
               >
-                <img src="/src/assets/eraser.svg" alt="橡皮" width="24" height="24" />
+                <img src={eraserIcon} alt="橡皮" width="24" height="24" />
                 <span>橡皮</span>
               </button>
               <button
@@ -1759,7 +1766,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
                 onClick={() => toggleTool('move')}
                 title="移动工具"
               >
-                <img src="/src/assets/move.svg" alt="移动工具" width="24" height="24" />
+                <img src={moveIcon} alt="移动工具" width="24" height="24" />
                 <span>移动工具</span>
               </button>
               <button
@@ -1767,7 +1774,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
                 onClick={() => toggleTool('selection')}
                 title="选区工具 (左键选择，右键切换模式)"
               >
-                <img src="/src/assets/pen-tool.svg" alt="选区工具" width="24" height="24" />
+                <img src={penToolIcon} alt="选区工具" width="24" height="24" />
                 <span>选区工具</span>
               </button>
               <button
@@ -1775,7 +1782,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
                 onClick={() => toggleTool('eyedropper')}
                 title="取色管工具"
               >
-                <img src="/src/assets/coloize.svg" alt="取色管工具" width="24" height="24" />
+                <img src={coloizeIcon} alt="取色管工具" width="24" height="24" />
                 <span>取色管工具</span>
               </button>
             </div>
