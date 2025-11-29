@@ -1,10 +1,12 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { open } from '@tauri-apps/plugin-shell';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import './TitleBar.css';
 import logoImg from '../assets/logo.png';
 import creditsContent from '../../credits.md?raw';
+import { manualCheckUpdate } from '../utils/updater';
 
 interface TitleBarProps {
   packSize?: number;      // 材质包大小
@@ -42,6 +44,18 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
   const CreditsIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" width="20" height="20">
       <path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/>
+    </svg>
+  );
+
+  const UpdateIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+      <path d="M12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0 2c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm-1-10v4h2v-4h3l-4-4-4 4h3z"/>
+    </svg>
+  );
+
+  const ReportIssueIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+      <path d="M1.5 4.25c0-.966.784-1.75 1.75-1.75h17.5c.966 0 1.75.784 1.75 1.75v12.5a1.75 1.75 0 0 1-1.75 1.75h-9.586a.25.25 0 0 0-.177.073l-3.5 3.5A1.458 1.458 0 0 1 5 21.043V18.5H3.25a1.75 1.75 0 0 1-1.75-1.75ZM3.25 4a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h2.5a.75.75 0 0 1 .75.75v3.19l3.427-3.427A1.75 1.75 0 0 1 11.164 17h9.586a.25.25 0 0 0 .25-.25V4.25a.25.25 0 0 0-.25-.25ZM12 6a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0v-4A.75.75 0 0 1 12 6Zm0 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path>
     </svg>
   );
 
@@ -223,6 +237,26 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
       
       <div className="titlebar-controls">
         <button
+          className="titlebar-button update"
+          onClick={manualCheckUpdate}
+          title="检查更新"
+        >
+          <UpdateIcon />
+        </button>
+        <button
+          className="titlebar-button report-issue"
+          onClick={async () => {
+            try {
+              await open('https://github.com/Little100/Minecraft-Resourcespack-Editor/issues');
+            } catch (error) {
+              console.error('Failed to open issues page:', error);
+            }
+          }}
+          title="报告问题"
+        >
+          <ReportIssueIcon />
+        </button>
+        <button
           className="titlebar-button credits"
           onClick={() => setShowCredits(true)}
           title="鸣谢"
@@ -291,9 +325,13 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
                 <div
                   key={index}
                   className={`contributor-card ${contributor.link ? 'clickable' : ''}`}
-                  onClick={() => {
+                  onClick={async () => {
                     if (contributor.link) {
-                      window.open(contributor.link, '_blank');
+                      try {
+                        await open(contributor.link);
+                      } catch (error) {
+                        console.error('Failed to open link:', error);
+                      }
                     }
                   }}
                 >

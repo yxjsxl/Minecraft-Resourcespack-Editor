@@ -173,6 +173,25 @@
   height: 20px;
 }
 
+.titlebar-button.update {
+  color: var(--text-secondary);
+}
+
+.titlebar-button.update:hover {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+[data-theme="dark"] .titlebar-button.update:hover {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.titlebar-button.update svg {
+  width: 20px;
+  height: 20px;
+}
+
 .titlebar-button.credits {
   color: var(--text-secondary);
 }
@@ -188,6 +207,25 @@
 }
 
 .titlebar-button.credits svg {
+  width: 20px;
+  height: 20px;
+}
+
+.titlebar-button.report-issue {
+  color: var(--text-secondary);
+}
+
+.titlebar-button.report-issue:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+[data-theme="dark"] .titlebar-button.report-issue:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.titlebar-button.report-issue svg {
   width: 20px;
   height: 20px;
 }

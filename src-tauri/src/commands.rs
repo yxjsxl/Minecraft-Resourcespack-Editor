@@ -1817,3 +1817,20 @@ pub async fn convert_pack_version(
     
     crate::version_converter::convert_pack_version(input, output, &target_version)
 }
+
+/// 获取URL内容
+#[tauri::command]
+pub async fn fetch_url(url: String) -> Result<String, String> {
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| format!("Failed to fetch URL: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("HTTP error! status: {}", response.status()));
+    }
+    
+    response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))
+}

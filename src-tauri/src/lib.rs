@@ -142,6 +142,7 @@ pub fn run() {
         read_pack_mcmeta,
         get_supported_versions,
         convert_pack_version,
+        fetch_url,
         history_manager::save_file_history,
         history_manager::load_file_history,
         history_manager::get_history_stats,
