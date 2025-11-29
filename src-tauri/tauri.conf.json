@@ -35,6 +35,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      }
+    },
     "fileAssociations": [
       {
         "ext": ["lang"],
