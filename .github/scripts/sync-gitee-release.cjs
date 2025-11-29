@@ -133,9 +133,20 @@ async function main() {
     const assetsDir = 'release-assets';
     const files = fs.readdirSync(assetsDir);
     
-    for (const file of files) {
+    // 只上传安装包和签名文件，跳过 source code
+    const filesToUpload = files.filter(file => {
+      return file.endsWith('.msi') ||
+             file.endsWith('.msi.zip') ||
+             file.endsWith('.sig') ||
+             file.endsWith('.json');
+    });
+    
+    console.log(`📦 找到 ${filesToUpload.length} 个文件需要上传`);
+    
+    for (const file of filesToUpload) {
       const filePath = path.join(assetsDir, file);
       if (fs.statSync(filePath).isFile()) {
+        console.log(`⏳ 正在上传: ${file}...`);
         await uploadAssetToGitee(giteeRelease.id, filePath);
       }
     }
