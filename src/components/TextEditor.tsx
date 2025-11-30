@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import "./TextEditor.css";
 import CanvasSyntaxHighlighter from "./CanvasSyntaxHighlighter";
-import { writeFileContent } from "../utils/tauri-api";
+import SoundCreatorDialog from "./SoundCreatorDialog";
+import AudioHoverPlayer from "./AudioHoverPlayer";
+import { readFileContent, writeFileContent } from "../utils/tauri-api";
 
 interface TextEditorProps {
   content: string;
@@ -13,6 +15,7 @@ interface TextEditorProps {
   readOnly?: boolean;
   initialLine?: number;
   onDownloadSounds?: () => void;
+  onRefreshFileTree?: () => void;
 }
 
 interface ContextMenu {
@@ -21,7 +24,12 @@ interface ContextMenu {
   hasSelection: boolean;
 }
 
-export default function TextEditor({ content, filePath, onChange, onSave, readOnly = false, initialLine, onDownloadSounds }: TextEditorProps) {
+interface AudioHover {
+  audioPath: string;
+  position: { x: number; y: number };
+}
+
+export default function TextEditor({ content, filePath, onChange, onSave, readOnly = false, initialLine, onDownloadSounds, onRefreshFileTree }: TextEditorProps) {
   const [text, setText] = useState(content);
   const [lineCount, setLineCount] = useState(1);
   const [isDirty, setIsDirty] = useState(false);
@@ -34,16 +42,19 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
   const [scrollLeft, setScrollLeft] = useState(0);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+  const [showSoundCreator, setShowSoundCreator] = useState(false);
+  const [audioHover, setAudioHover] = useState<AudioHover | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
   const originalContent = useRef(content);
-  
+
   const isJSON = filePath.toLowerCase().endsWith('.json') ||
-                 filePath.toLowerCase().endsWith('.mcmeta') ||
-                 filePath.toLowerCase().endsWith('.lang');
-  
-  const isSoundsJson = filePath === 'assets/minecraft/sounds/sounds.json';
+    filePath.toLowerCase().endsWith('.mcmeta') ||
+    filePath.toLowerCase().endsWith('.lang');
+
+  const isSoundsJson = filePath.includes('sounds.json');
 
   useEffect(() => {
     setText(content);
@@ -59,31 +70,31 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
     if (textareaRef.current && initialLine && initialLine > 0) {
       const textarea = textareaRef.current;
       const lines = text.split('\n');
-      
+
       // 确保行号在有效范围内
       const targetLine = Math.min(initialLine, lines.length);
-      
+
       // 计算目标行的字符偏移量
       let charOffset = 0;
       for (let i = 0; i < targetLine - 1; i++) {
         charOffset += lines[i].length + 1;
       }
-      
+
       // 设置光标位置到目标行的开头
       textarea.focus();
       textarea.setSelectionRange(charOffset, charOffset);
-      
+
       const lineHeight = fontSize * 1.5;
       const targetScrollTop = (targetLine - 1) * lineHeight - (textarea.clientHeight / 2) + (lineHeight / 2);
       textarea.scrollTop = Math.max(0, targetScrollTop);
-      
+
       // 设置高亮效果
       setHighlightedLine(targetLine);
-      
+
       const timer = setTimeout(() => {
         setHighlightedLine(null);
       }, 2000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [initialLine, text, fontSize]);
@@ -152,11 +163,11 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
   const saveHistoryToBackend = async () => {
     const historyEnabled = localStorage.getItem('historyEnabled') === 'true';
     if (!historyEnabled) return;
-    
+
     try {
       const packDir = await invoke<string>('get_current_pack_path');
       const maxCount = parseInt(localStorage.getItem('maxHistoryCount') || '30');
-      
+
       await invoke('save_file_history', {
         packDir,
         filePath: filePath,
@@ -219,12 +230,67 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
     }
   };
 
+  const [audioPathPositions, setAudioPathPositions] = useState<Array<{
+    path: string;
+    line: number;
+    endCol: number;
+  }>>([]);
+
+  useEffect(() => {
+    if (!isSoundsJson) return;
+
+    try {
+      const parsed = JSON.parse(text);
+      const positions: Array<{ path: string; line: number; endCol: number }> = [];
+      const lines = text.split('\n');
+
+      // 遍历每个音效事件
+      Object.keys(parsed).forEach(eventKey => {
+        const event = parsed[eventKey];
+        if (event.sounds && Array.isArray(event.sounds)) {
+          event.sounds.forEach((sound: any) => {
+            const soundPath = typeof sound === 'string' ? sound : sound.name;
+            if (soundPath) {
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const searchStr = `"${soundPath}"`;
+                const index = line.indexOf(searchStr);
+                if (index !== -1) {
+                  positions.push({
+                    path: soundPath,
+                    line: i,
+                    endCol: index + searchStr.length
+                  });
+                }
+              }
+            }
+          });
+        }
+      });
+
+      setAudioPathPositions(positions);
+    } catch (e) {
+      setAudioPathPositions([]);
+    }
+  }, [text, isSoundsJson]);
+
+  const handlePlayIconClick = (audioPath: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAudioHover({
+      audioPath,
+      position: {
+        x: e.clientX + 20,
+        y: e.clientY - 50
+      }
+    });
+  };
+
   const handleSave = async () => {
     if (isDirty) {
       try {
         // 直接保存文件到磁盘
         await writeFileContent(filePath, text);
-        
+
         // 更新原始内容引用
         originalContent.current = text;
         setIsDirty(false);
@@ -232,7 +298,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
         if (onSave) {
           onSave();
         }
-        
+
         // 保存历史记录
         await saveHistoryToBackend();
       } catch (error) {
@@ -301,15 +367,15 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
     // 处理 Tab 键
     if (e.key === 'Tab') {
       e.preventDefault();
-      
+
       const beforeCursor = value.substring(0, selectionStart);
       const afterCursor = value.substring(selectionEnd);
-      
+
       if (e.shiftKey) {
         // Shift+Tab: 减少缩进
         const lines = beforeCursor.split('\n');
         const currentLine = lines[lines.length - 1];
-        
+
         if (currentLine.startsWith('  ')) {
           lines[lines.length - 1] = currentLine.substring(2);
           const newText = lines.join('\n') + afterCursor;
@@ -317,7 +383,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
           setIsDirty(newText !== originalContent.current);
           addToHistory(newText);
           if (onChange) onChange(newText);
-          
+
           setTimeout(() => {
             textarea.selectionStart = textarea.selectionEnd = selectionStart - 2;
           }, 0);
@@ -329,39 +395,39 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
         setIsDirty(newText !== originalContent.current);
         addToHistory(newText);
         if (onChange) onChange(newText);
-        
+
         setTimeout(() => {
           textarea.selectionStart = textarea.selectionEnd = selectionStart + 2;
         }, 0);
       }
       return;
     }
-    
+
     // 处理 Enter 键 - 自动缩进
     if (e.key === 'Enter') {
       e.preventDefault();
-      
+
       const beforeCursor = value.substring(0, selectionStart);
       const afterCursor = value.substring(selectionEnd);
       const lines = beforeCursor.split('\n');
       const currentLine = lines[lines.length - 1];
-      
+
       // 计算当前行的缩进
       const indentMatch = currentLine.match(/^(\s*)/);
       const currentIndent = indentMatch ? indentMatch[1] : '';
-      
+
       // 检查当前行是否以 { [ ( 结尾，如果是则增加缩进
       const trimmedLine = currentLine.trim();
       let extraIndent = '';
       if (trimmedLine.endsWith('{') || trimmedLine.endsWith('[') || trimmedLine.endsWith('(')) {
         extraIndent = '  ';
       }
-      
+
       // 检查光标后是否紧跟 } ] )，如果是则在中间插入空行
       const nextChar = afterCursor.charAt(0);
       let newText;
       let cursorOffset;
-      
+
       if ((nextChar === '}' || nextChar === ']' || nextChar === ')') && extraIndent) {
         // 在括号之间插入两行
         newText = beforeCursor + '\n' + currentIndent + extraIndent + '\n' + currentIndent + afterCursor;
@@ -371,13 +437,13 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
         newText = beforeCursor + '\n' + currentIndent + extraIndent + afterCursor;
         cursorOffset = selectionStart + 1 + currentIndent.length + extraIndent.length;
       }
-      
+
       setText(newText);
       setLineCount(newText.split('\n').length);
       setIsDirty(newText !== originalContent.current);
       addToHistory(newText);
       if (onChange) onChange(newText);
-      
+
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = cursorOffset;
       }, 0);
@@ -389,10 +455,10 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     const target = e.currentTarget;
     const startTime = performance.now();
-    
+
     setScrollTop(target.scrollTop);
     setScrollLeft(target.scrollLeft);
-    
+
     const duration = performance.now() - startTime;
     if (duration > 16) {
       console.log(`[性能-滚动] ️ 滚动处理耗时: ${duration.toFixed(2)}ms`);
@@ -402,7 +468,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
   // 格式化JSON
   const formatJSON = () => {
     if (!isJSON) return;
-    
+
     try {
       const parsed = JSON.parse(text);
       const formatted = JSON.stringify(parsed, null, 2);
@@ -426,7 +492,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
     if (!textarea) return;
 
     const hasSelection = textarea.selectionStart !== textarea.selectionEnd;
-    
+
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const menuWidth = 200;
@@ -467,13 +533,13 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
   // 剪切选中文本
   const handleCut = async () => {
     if (readOnly) return;
-    
+
     const textarea = textareaRef.current;
     if (!textarea) return;
 
     const { selectionStart, selectionEnd } = textarea;
     const selectedText = text.substring(selectionStart, selectionEnd);
-    
+
     try {
       await navigator.clipboard.writeText(selectedText);
       const newText = text.substring(0, selectionStart) + text.substring(selectionEnd);
@@ -485,7 +551,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
         onChange(newText);
       }
       setContextMenu(null);
-      
+
       // 恢复光标位置
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = selectionStart;
@@ -499,7 +565,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
   // 粘贴文本
   const handlePaste = async () => {
     if (readOnly) return;
-    
+
     const textarea = textareaRef.current;
     if (!textarea) return;
 
@@ -507,7 +573,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
       const clipboardText = await navigator.clipboard.readText();
       const { selectionStart, selectionEnd } = textarea;
       const newText = text.substring(0, selectionStart) + clipboardText + text.substring(selectionEnd);
-      
+
       setText(newText);
       setLineCount(newText.split('\n').length);
       setIsDirty(newText !== originalContent.current);
@@ -516,7 +582,7 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
         onChange(newText);
       }
       setContextMenu(null);
-      
+
       // 恢复光标位置
       setTimeout(() => {
         const newPosition = selectionStart + clipboardText.length;
@@ -546,8 +612,8 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
             title="撤销 (Ctrl+Z)"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 7v6h6"/>
-              <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
+              <path d="M3 7v6h6" />
+              <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
             </svg>
           </button>
           <button
@@ -557,8 +623,8 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
             title="重做 (Ctrl+Y)"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 7v6h-6"/>
-              <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/>
+              <path d="M21 7v6h-6" />
+              <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
             </svg>
           </button>
           <button
@@ -584,6 +650,17 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
               </svg>
             </button>
           )}
+          {isSoundsJson && (
+            <button
+              className="editor-btn"
+              onClick={() => setShowSoundCreator(true)}
+              title="创建音效"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"></path>
+              </svg>
+            </button>
+          )}
           <button
             className="editor-btn save-btn"
             onClick={handleSave}
@@ -591,9 +668,9 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
             title="保存 (Ctrl+S)"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-              <polyline points="17 21 17 13 7 13 7 21"/>
-              <polyline points="7 3 7 8 15 8"/>
+              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
             </svg>
           </button>
           {readOnly && <span className="readonly-badge">只读</span>}
@@ -650,6 +727,55 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
             wrap="off"
             autoComplete="off"
           />
+          {/* 音频路径播放图标 */}
+          {isSoundsJson && audioPathPositions.map((item, index) => {
+            const lineHeight = fontSize * 1.5;
+            const charWidth = fontSize * 0.6;
+            const top = item.line * lineHeight - scrollTop;
+            const left = item.endCol * charWidth - scrollLeft + 5;
+
+            // 只渲染可见区域的图标
+            if (top < -30 || top > (editorContainerRef.current?.clientHeight || 0)) {
+              return null;
+            }
+
+            return (
+              <button
+                key={`${item.path}-${index}`}
+                className="audio-play-icon"
+                style={{
+                  position: 'absolute',
+                  top: `${top + 2}px`,
+                  left: `${left}px`,
+                  width: '16px',
+                  height: '16px',
+                  padding: '2px',
+                  background: 'var(--accent-color)',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: 0.7,
+                  transition: 'opacity 0.2s',
+                  zIndex: 10,
+                }}
+                onClick={(e) => handlePlayIconClick(item.path, e)}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLElement).style.opacity = '1';
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLElement).style.opacity = '0.7';
+                }}
+                title={`播放: ${item.path}`}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -776,6 +902,47 @@ export default function TextEditor({ content, filePath, onChange, onSave, readOn
             </div>
           </div>
         </>
+      )}
+      {/* 创建音效对话框 */}
+      {showSoundCreator && (
+        <>
+          <div className="modal-overlay" onClick={() => setShowSoundCreator(false)} />
+          <SoundCreatorDialog
+            onClose={() => setShowSoundCreator(false)}
+            onSave={async (data) => {
+              console.log('保存音效数据:', data);
+              setShowSoundCreator(false);
+              
+              // 重新加载文件
+              try {
+                const newContent = await readFileContent(filePath);
+                setText(newContent);
+                setLineCount(newContent.split('\n').length);
+                originalContent.current = newContent;
+                setIsDirty(false);
+                if (onChange) {
+                  onChange(newContent);
+                }
+              } catch (error) {
+                console.error('重新加载文件失败:', error);
+              }
+              
+              if (onRefreshFileTree) {
+                onRefreshFileTree();
+              }
+            }}
+          />
+        </>
+      )}
+
+      {/* 音频悬浮播放器 */}
+      {audioHover && createPortal(
+        <AudioHoverPlayer
+          audioPath={audioHover.audioPath}
+          position={audioHover.position}
+          onClose={() => setAudioHover(null)}
+        />,
+        document.body
       )}
     </div>
   );

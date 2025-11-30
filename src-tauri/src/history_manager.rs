@@ -264,6 +264,11 @@ fn calculate_dir_size(path: &Path, exclude_history: bool) -> Result<u64, String>
                 continue;
             }
             
+            // 始终排除.little100缓存文件夹
+            if entry_path.file_name().and_then(|s| s.to_str()) == Some(".little100") {
+                continue;
+            }
+            
             if entry_path.is_file() {
                 total_size += entry_path.metadata()
                     .map_err(|e| format!("获取文件大小失败: {}", e))?

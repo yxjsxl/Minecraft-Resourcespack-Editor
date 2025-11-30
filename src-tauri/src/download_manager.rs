@@ -188,6 +188,7 @@ impl DownloadManager {
     }
 
     /// 获取取消令牌
+    #[allow(dead_code)]
     pub async fn get_cancel_token(&self, task_id: &str) -> Option<CancellationToken> {
         let tokens = self.cancel_tokens.lock().await;
         tokens.get(task_id).cloned()

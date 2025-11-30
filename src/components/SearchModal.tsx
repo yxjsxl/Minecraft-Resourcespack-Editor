@@ -230,25 +230,25 @@ export default function SearchModal({
                 </div>
               ) : fileNameResults.length > 0 ? (
                 fileNameResults.map((result, index) => {
-                  const fileName = result.file_path.split('/').pop() || result.file_path;
-                  return (
-                    <div
-                      key={`file-${index}`}
-                      className={`result-item ${selectedResult === index ? 'selected' : ''}`}
-                      onClick={() => handleResultClick(result)}
-                    >
-                      <div className="result-path">
-                        {highlightText(fileName, result.match_start, result.match_end)}
-                      </div>
-                      {result.translation && (
-                        <div className="result-translation">
-                          {result.translation}
-                        </div>
-                      )}
-                      <div className="result-full-path">{result.file_path}</div>
+                const fileName = result.file_path.split('/').pop() || result.file_path;
+                return (
+                  <div
+                    key={`file-${index}`}
+                    className={`result-item ${selectedResult === index ? 'selected' : ''}`}
+                    onClick={() => handleResultClick(result)}
+                  >
+                    <div className="result-path">
+                      {highlightText(fileName, result.match_start, result.match_end)}
                     </div>
-                  );
-                })
+                    {result.translation && (
+                      <div className="result-translation">
+                        {highlightText(result.translation, result.match_start, result.match_end)}
+                      </div>
+                    )}
+                    <div className="result-full-path">{result.file_path}</div>
+                  </div>
+                );
+              })
               ) : hasSearched ? (
                 <div className="panel-empty">
                   <p>无文件名匹配</p>

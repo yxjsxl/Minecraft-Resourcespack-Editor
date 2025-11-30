@@ -12,3 +12,8 @@
  - [遠風化蝶_ | Github叫stone926](https://space.bilibili.com/350642293)
  - QQ: 未知
  - avatar: src/assets/avatar/stone926.png
+
+# 从零开始直接打开文件夹
+ - [Xiaoliang-dev](https://github.com/Xiaoliang-dev)
+ - QQ: 270****939
+ - avatar: src/assets/avatar/Xiaoliang-dev.png

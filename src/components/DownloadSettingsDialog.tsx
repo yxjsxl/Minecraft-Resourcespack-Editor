@@ -71,7 +71,7 @@ export default function DownloadSettingsDialog({ onConfirm, onCancel }: Download
                   </svg>
                   <span>
                     注意: 线程数过高可能会占用较多系统资源和网络带宽。
-                  </span> // 太快了是会死人的啦啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊
+                  </span> // 太快了❤是会死人的啦啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊啊❤
                 </div>
               )}
             </div>

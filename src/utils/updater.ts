@@ -8,7 +8,7 @@ const REPO_NAME = 'minecraft-resourcespack-editor';
 const CHANGELOG_RAW_URL = 'https://gitee.com/little_100/minecraft-resourcespack-editor/raw/main/CHANGELOG.md';
 
 // 当前版本
-const CURRENT_VERSION = '0.1.4';
+const CURRENT_VERSION = '0.1.5';
 
 interface GiteeRelease {
   id: number;
@@ -77,6 +77,351 @@ async function fetchChangelog(): Promise<string | null> {
       return null;
     }
   }
+}
+
+function showUpdateDialog(version: string, body: string, downloadUrl?: string, showChangelogButton: boolean = false) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s ease, backdrop-filter 0.3s ease;
+  `;
+  
+  requestAnimationFrame(() => {
+    overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.backdropFilter = 'blur(10px)';
+    (overlay.style as any).webkitBackdropFilter = 'blur(10px)';
+  });
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    background: var(--bg-primary, #ffffff);
+    color: var(--text-primary, #000000);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  `;
+  
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      modal.style.opacity = '1';
+      modal.style.transform = 'scale(1) translateY(0)';
+    });
+  });
+
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+  `;
+  
+  const title = document.createElement('h2');
+  title.textContent = '发现新版本';
+  title.style.cssText = `
+    margin: 0 0 8px 0;
+    font-size: 20px;
+    font-weight: 600;
+  `;
+  
+  const versionInfo = document.createElement('div');
+  versionInfo.style.cssText = `
+    font-size: 14px;
+    color: var(--text-secondary, #666666);
+  `;
+  versionInfo.innerHTML = `
+    当前版本: <span style="color: var(--text-primary, #000000);">v${CURRENT_VERSION}</span>
+    <span style="margin: 0 8px;">→</span>
+    最新版本: <span style="color: #22c55e; font-weight: 600;">${version}</span>
+  `;
+  
+  header.appendChild(title);
+  header.appendChild(versionInfo);
+
+  const content = document.createElement('div');
+  content.style.cssText = `
+    padding: 20px 24px;
+    max-height: 300px;
+    overflow-y: auto;
+  `;
+  
+  const updateTitle = document.createElement('h3');
+  updateTitle.textContent = '更新内容:';
+  updateTitle.style.cssText = `
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+  `;
+  
+  const updateContent = document.createElement('div');
+  updateContent.style.cssText = `
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: var(--text-secondary, #666666);
+  `;
+  updateContent.textContent = body || '暂无更新说明';
+  
+  content.appendChild(updateTitle);
+  content.appendChild(updateContent);
+
+  const footer = document.createElement('div');
+  footer.style.cssText = `
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color, #e0e0e0);
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+  `;
+
+  const closeModal = () => {
+    modal.style.opacity = '0';
+    modal.style.transform = 'scale(0.9) translateY(-20px)';
+    overlay.style.background = 'rgba(0, 0, 0, 0)';
+    overlay.style.backdropFilter = 'blur(0px)';
+    (overlay.style as any).webkitBackdropFilter = 'blur(0px)';
+    
+    setTimeout(() => {
+      document.body.removeChild(overlay);
+    }, 300);
+  };
+
+  if (showChangelogButton) {
+    const changelogBtn = document.createElement('button');
+    changelogBtn.textContent = '查看完整更新日志';
+    changelogBtn.style.cssText = `
+      padding: 8px 16px;
+      border: 1px solid var(--border-color, #e0e0e0);
+      background: var(--bg-secondary, #f5f5f5);
+      color: var(--text-primary, #000000);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    `;
+    changelogBtn.onmouseover = () => {
+      changelogBtn.style.background = 'var(--hover-bg, #e0e0e0)';
+    };
+    changelogBtn.onmouseout = () => {
+      changelogBtn.style.background = 'var(--bg-secondary, #f5f5f5)';
+    };
+    changelogBtn.onclick = async () => {
+      closeModal();
+      const changelog = await fetchChangelog();
+      if (changelog) {
+        showChangelogModal(changelog, version);
+      } else {
+        showErrorDialog('无法获取更新日志');
+      }
+    };
+    footer.appendChild(changelogBtn);
+  }
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '稍后提醒';
+  cancelBtn.style.cssText = `
+    padding: 8px 16px;
+    border: 1px solid var(--border-color, #e0e0e0);
+    background: var(--bg-secondary, #f5f5f5);
+    color: var(--text-primary, #000000);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+  `;
+  cancelBtn.onmouseover = () => {
+    cancelBtn.style.background = 'var(--hover-bg, #e0e0e0)';
+  };
+  cancelBtn.onmouseout = () => {
+    cancelBtn.style.background = 'var(--bg-secondary, #f5f5f5)';
+  };
+  cancelBtn.onclick = closeModal;
+
+  const downloadBtn = document.createElement('button');
+  downloadBtn.textContent = '前往下载';
+  downloadBtn.style.cssText = `
+    padding: 8px 16px;
+    border: none;
+    background: #22c55e;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+  `;
+  downloadBtn.onmouseover = () => {
+    downloadBtn.style.background = '#16a34a';
+  };
+  downloadBtn.onmouseout = () => {
+    downloadBtn.style.background = '#22c55e';
+  };
+  downloadBtn.onclick = async () => {
+    closeModal();
+    if (downloadUrl) {
+      await open(downloadUrl);
+    } else {
+      await open(`https://gitee.com/${REPO_OWNER}/${REPO_NAME}/releases/${version}`);
+    }
+  };
+
+  footer.appendChild(cancelBtn);
+  footer.appendChild(downloadBtn);
+
+  modal.appendChild(header);
+  modal.appendChild(content);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      closeModal();
+    }
+  };
+
+  document.body.appendChild(overlay);
+}
+
+function showErrorDialog(message: string) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s ease, backdrop-filter 0.3s ease;
+  `;
+  
+  requestAnimationFrame(() => {
+    overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.backdropFilter = 'blur(10px)';
+    (overlay.style as any).webkitBackdropFilter = 'blur(10px)';
+  });
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    background: var(--bg-primary, #ffffff);
+    color: var(--text-primary, #000000);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  `;
+  
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      modal.style.opacity = '1';
+      modal.style.transform = 'scale(1) translateY(0)';
+    });
+  });
+
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+  `;
+  
+  const title = document.createElement('h2');
+  title.textContent = '提示';
+  title.style.cssText = `
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  `;
+  
+  header.appendChild(title);
+
+  const content = document.createElement('div');
+  content.style.cssText = `
+    padding: 20px 24px;
+    font-size: 14px;
+    line-height: 1.6;
+  `;
+  content.textContent = message;
+
+  const footer = document.createElement('div');
+  footer.style.cssText = `
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color, #e0e0e0);
+    display: flex;
+    justify-content: flex-end;
+  `;
+
+  const closeModal = () => {
+    modal.style.opacity = '0';
+    modal.style.transform = 'scale(0.9) translateY(-20px)';
+    overlay.style.background = 'rgba(0, 0, 0, 0)';
+    overlay.style.backdropFilter = 'blur(0px)';
+    (overlay.style as any).webkitBackdropFilter = 'blur(0px)';
+    
+    setTimeout(() => {
+      document.body.removeChild(overlay);
+    }, 300);
+  };
+
+  const okBtn = document.createElement('button');
+  okBtn.textContent = '确定';
+  okBtn.style.cssText = `
+    padding: 8px 24px;
+    border: none;
+    background: #3b82f6;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+  `;
+  okBtn.onmouseover = () => {
+    okBtn.style.background = '#2563eb';
+  };
+  okBtn.onmouseout = () => {
+    okBtn.style.background = '#3b82f6';
+  };
+  okBtn.onclick = closeModal;
+
+  footer.appendChild(okBtn);
+
+  modal.appendChild(header);
+  modal.appendChild(content);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      closeModal();
+    }
+  };
+
+  document.body.appendChild(overlay);
 }
 
 function showChangelogModal(changelog: string, latestVersion?: string) {
@@ -222,6 +567,14 @@ function showChangelogModal(changelog: string, latestVersion?: string) {
   const renderMarkdown = (md: string) => {
     md = md.replace(/##\s*\[未发布\][\s\S]*?(?=##\s*\[[\d.]+\]|$)/i, '');
     
+    if (latestVersion) {
+      const versionPattern = new RegExp(`##\\s*\\[${latestVersion.replace('v', '')}\\][\\s\\S]*?(?=##\\s*\\[|$)`, 'i');
+      const match = md.match(versionPattern);
+      if (match) {
+        md = match[0];
+      }
+    }
+    
     // 分割成行处理
     const lines = md.split('\n');
     let html = '';
@@ -337,19 +690,8 @@ export async function checkForUpdates(): Promise<boolean> {
         asset => asset.name.endsWith('.msi') || asset.name.endsWith('.exe')
       );
       
-      const message = `发现新版本 ${latestVersion}\n\n更新内容:\n${latestRelease.body}\n\n点击"确定"前往下载页面`;
-      
-      const shouldUpdate = confirm(message);
-      
-      if (shouldUpdate) {
-        // 打开下载页面
-        if (windowsAsset) {
-          await open(windowsAsset.browser_download_url);
-        } else {
-          await open(`https://gitee.com/${REPO_OWNER}/${REPO_NAME}/releases/${latestVersion}`);
-        }
-        return true;
-      }
+      showUpdateDialog(latestVersion, latestRelease.body, windowsAsset?.browser_download_url);
+      return true;
     } else {
       console.log('当前已是最新版本');
     }
@@ -405,7 +747,7 @@ export async function manualCheckUpdate() {
     const latestRelease = await fetchLatestRelease();
     
     if (!latestRelease) {
-      alert('无法获取最新版本信息，请检查网络连接');
+      showErrorDialog('无法获取最新版本信息，请检查网络连接');
       return;
     }
     
@@ -417,34 +759,17 @@ export async function manualCheckUpdate() {
         asset => asset.name.endsWith('.msi') || asset.name.endsWith('.exe')
       );
       
-      const message = `发现新版本 ${latestVersion}\n\n更新内容:\n${latestRelease.body}\n\n点击"确定"前往下载页面，点击"取消"查看完整更新日志`;
-      
-      const shouldDownload = confirm(message);
-      
-      if (shouldDownload) {
-        if (windowsAsset) {
-          await open(windowsAsset.browser_download_url);
-        } else {
-          await open(`https://gitee.com/${REPO_OWNER}/${REPO_NAME}/releases/${latestVersion}`);
-        }
-      } else {
-        const changelog = await fetchChangelog();
-        if (changelog) {
-          showChangelogModal(changelog, latestVersion);
-        } else {
-          alert('无法获取更新日志');
-        }
-      }
+      showUpdateDialog(latestVersion, latestRelease.body, windowsAsset?.browser_download_url, true);
     } else {
       const changelog = await fetchChangelog();
       if (changelog) {
-        showChangelogModal(changelog, latestVersion);
+        showChangelogModal(changelog, currentVersion);
       } else {
-        alert('无法获取更新日志');
+        showErrorDialog('无法获取更新日志');
       }
     }
   } catch (error) {
     console.error('更新失败:', error);
-    alert(`检查更新失败: ${error}`);
+    showErrorDialog(`检查更新失败: ${error}`);
   }
 }

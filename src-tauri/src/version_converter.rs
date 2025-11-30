@@ -10,15 +10,18 @@ use zip::ZipArchive;
 #[derive(Debug, Deserialize)]
 struct VersionMap {
     resource_pack: HashMap<String, Vec<String>>,
+    #[allow(dead_code)]
     last_updated: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PackMeta {
     pub pack: PackInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PackInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pack_format: Option<u32>,

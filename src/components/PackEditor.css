@@ -1226,6 +1226,55 @@ body.acrylic-enabled .editor-tab.active {
   font-size: 14px;
 }
 
+.audio-file-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  gap: 2rem;
+}
+
+.audio-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.audio-header svg {
+  color: var(--primary-color);
+}
+
+.audio-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.audio-header .file-path {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.audio-player-container {
+  width: 100%;
+  max-width: 600px;
+  padding: 2rem;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.audio-player-container audio {
+  width: 100%;
+  outline: none;
+}
+
 .unsupported-file {
   display: flex;
   flex-direction: column;

@@ -10,6 +10,7 @@ import { manualCheckUpdate } from '../utils/updater';
 import Little100Avatar from '../assets/avatar/Little_100.png';
 import LivedInCornerAvatar from '../assets/avatar/LivedInCorner.png';
 import Stone926Avatar from '../assets/avatar/stone926.png';
+import XiaoliangDevAvatar from '../assets/avatar/Xiaoliang-dev.png';
 
 interface TitleBarProps {
   packSize?: number;      // 材质包大小
@@ -67,6 +68,7 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
     'src/assets/avatar/Little_100.png': Little100Avatar,
     'src/assets/avatar/LivedInCorner.png': LivedInCornerAvatar,
     'src/assets/avatar/stone926.png': Stone926Avatar,
+    'src/assets/avatar/Xiaoliang-dev.png': XiaoliangDevAvatar,
   };
 
   // 解析credits.md内容

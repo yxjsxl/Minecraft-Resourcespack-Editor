@@ -411,6 +411,7 @@ async fn download_language_file(
 }
 
 /// 下载版本并提取assets
+#[allow(dead_code)]
 pub async fn download_and_extract_version(
     version_id: &str,
     temp_dir: &Path,
@@ -643,6 +644,7 @@ pub fn clear_template_cache(temp_dir: &Path) -> Result<(), String> {
 }
 
 /// 下载 最新版sounds.json和所有.ogg文件
+#[allow(dead_code)]
 pub async fn download_minecraft_sounds(output_dir: &Path) -> Result<String, String> {
     use std::collections::HashMap;
     

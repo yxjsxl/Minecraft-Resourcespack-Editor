@@ -25,6 +25,89 @@ import moveIcon from "../assets/move.svg";
 import penToolIcon from "../assets/pen-tool.svg";
 import coloizeIcon from "../assets/coloize.svg";
 
+// 音频播放器组件
+interface AudioPlayerProps {
+  filePath: string;
+  fileName: string;
+  extension: string;
+}
+
+const AudioPlayer: React.FC<AudioPlayerProps> = ({ filePath, fileName, extension }) => {
+  const [audioUrl, setAudioUrl] = useState<string>('');
+  const [audioError, setAudioError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    let blobUrl: string | null = null;
+    
+    const loadAudio = async () => {
+      try {
+        const packDir = await invoke<string>('get_current_pack_path');
+        const fullPath = `${packDir}/${filePath}`;
+        
+        // 检查文件是否存在
+        const exists = await invoke<boolean>('check_file_exists', { filePath: fullPath });
+        if (!exists) {
+          setAudioError('音频文件不存在');
+          return;
+        }
+        
+        const base64Content = await invoke<string>('read_file_as_base64', { filePath: fullPath });
+        
+        const byteCharacters = atob(base64Content);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: `audio/${extension}` });
+        
+        blobUrl = URL.createObjectURL(blob);
+        setAudioUrl(blobUrl);
+        setAudioError(null);
+      } catch (error) {
+        console.error('加载音频失败:', error);
+        setAudioError('加载音频失败');
+      }
+    };
+    
+    loadAudio();
+    
+    return () => {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [filePath, extension]);
+  
+  return (
+    <div className="audio-file-viewer">
+      <div className="audio-header">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M9 18V5l12-2v13"></path>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="16" r="3"></circle>
+        </svg>
+        <h3>{fileName}</h3>
+        <p className="file-path">{filePath}</p>
+      </div>
+      <div className="audio-player-container">
+        {audioError ? (
+          <div style={{ color: 'var(--error-color)', textAlign: 'center' }}>
+            ⚠️ {audioError}
+          </div>
+        ) : audioUrl ? (
+          <audio controls style={{ width: '100%', maxWidth: '600px' }} key={audioUrl}>
+            <source src={audioUrl} type={`audio/${extension}`} />
+            您的浏览器不支持音频播放
+          </audio>
+        ) : (
+          <div style={{ textAlign: 'center' }}>加载中...</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 interface FileTreeNode {
   name: string;
   path: string;
@@ -111,7 +194,7 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
 
   const selectedFile = activeTabIndex >= 0 ? openTabs[activeTabIndex]?.path : null;
   const fileContent = activeTabIndex >= 0 ? openTabs[activeTabIndex]?.content : "";
-  
+
   const getFileExtension = (filePath: string): string => {
     return filePath.split('.').pop()?.toLowerCase() || '';
   };
@@ -149,29 +232,29 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
   const pathToMapKey = (filePath: string): string | null => {
     // 移除文件扩展名
     const pathWithoutExt = filePath.replace(/\.[^/.]+$/, '');
-    
+
     // 匹配新版本路径（block/item）
     const blockMatch = pathWithoutExt.match(/assets\/minecraft\/textures\/block\/(.+)/);
     if (blockMatch) {
       return `block.minecraft.${blockMatch[1].replace(/\//g, '.')}`;
     }
-    
+
     const itemMatch = pathWithoutExt.match(/assets\/minecraft\/textures\/item\/(.+)/);
     if (itemMatch) {
       return `item.minecraft.${itemMatch[1].replace(/\//g, '.')}`;
     }
-    
+
     // 匹配旧版本路径
     const blocksMatch = pathWithoutExt.match(/assets\/minecraft\/textures\/blocks\/(.+)/);
     if (blocksMatch) {
       return `block.minecraft.${blocksMatch[1].replace(/\//g, '.')}`;
     }
-    
+
     const itemsMatch = pathWithoutExt.match(/assets\/minecraft\/textures\/items\/(.+)/);
     if (itemsMatch) {
       return `item.minecraft.${itemsMatch[1].replace(/\//g, '.')}`;
     }
-    
+
     return null;
   };
 
@@ -195,15 +278,15 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
 
     // 尝试分离后缀并翻译
     const parts = nameWithoutExt.split('_');
-    
+
     // 从后往前检查后缀
     const suffixes: string[] = [];
     let baseParts = [...parts];
-    
+
     // 检查最后几个部分是否是已知后缀或数字
     for (let i = parts.length - 1; i > 0; i--) {
       const part = parts[i];
-      
+
       if (/^\d+$/.test(part)) {
         suffixes.unshift(part);
         baseParts = parts.slice(0, i);
@@ -220,15 +303,15 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     // 构建基础映射键
     const baseName = baseParts.join('_');
     const baseKey = mapKey.replace(nameWithoutExt, baseName);
-    
+
     // 查找基础翻译
     if (languageMap[baseKey]) {
       const baseTranslation = languageMap[baseKey];
-      
+
       if (suffixes.length > 0) {
         return `${baseTranslation}_${suffixes.join('_')}`;
       }
-      
+
       return baseTranslation;
     }
 
@@ -240,7 +323,7 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     if (language === 'zh') {
       // 直接从缓存获取翻译
       const translated = translationCache[filePath];
-      
+
       if (debugMode && filePath.includes('bamboo')) {
         console.log('[翻译调试]', {
           fileName,
@@ -250,21 +333,21 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
           hasCacheEntry: filePath in translationCache
         });
       }
-      
+
       if (translated) {
         return `${translated} (${fileName})`;
       }
     }
     return fileName;
   }, [language, translationCache, debugMode]);
-  
+
   const isPngFile = selectedFile ? getFileExtension(selectedFile) === 'png' : false;
 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
-    
+
     document.addEventListener('contextmenu', handleContextMenu);
     return () => document.removeEventListener('contextmenu', handleContextMenu);
   }, []);
@@ -273,11 +356,11 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     try {
       // 获取当前材质包路径
       const packDir = await invoke<string>('get_current_pack_path');
-      
+
       // 获取材质包大小 同时排除.history文件夹
       const pSize = await invoke<number>('get_pack_size', { packDir });
       setPackSize(pSize);
-      
+
       // 获取历史记录统计
       const stats = await invoke<any>('get_history_stats', { packDir });
       setHistorySize(stats.total_size || 0);
@@ -290,38 +373,38 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
 
   const precomputeTranslations = useCallback((node: FileTreeNode, path: string = '', isRoot: boolean = false): Record<string, string> => {
     const cache: Record<string, string> = {};
-    
+
     const currentPath = isRoot ? '' : (path ? `${path}/${node.name}` : node.name);
-    
+
     if (!node.is_dir) {
       const mapKey = pathToMapKey(currentPath);
       if (mapKey) {
         // 移除扩展名
         const nameWithoutExt = node.name.replace(/\.[^/.]+$/, '');
-        
+
         // 尝试直接匹配完整的映射键
         let translation = languageMap[mapKey];
-        
+
         // 如果是 item 路径且没找到翻译尝试用 block 路径
         if (!translation && mapKey.startsWith('item.minecraft.')) {
           const blockKey = mapKey.replace('item.minecraft.', 'block.minecraft.');
           translation = languageMap[blockKey];
         }
-        
+
         if (translation) {
           cache[currentPath] = translation;
         } else {
           // 尝试分离后缀并翻译
           const parts = nameWithoutExt.split('_');
-          
+
           // 从后往前检查后缀
           const suffixes: string[] = [];
           let baseParts = [...parts];
-          
+
           // 检查最后几个部分是否是已知后缀或数字
           for (let i = parts.length - 1; i > 0; i--) {
             const part = parts[i];
-            
+
             if (/^\d+$/.test(part)) {
               suffixes.unshift(part);
               baseParts = parts.slice(0, i);
@@ -334,20 +417,20 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
               break;
             }
           }
-          
+
           // 构建基础映射键
           const baseName = baseParts.join('_');
           const baseKey = mapKey.replace(nameWithoutExt, baseName);
-          
+
           // 查找基础翻译
           let baseTranslation = languageMap[baseKey];
-          
+
           // 如果是 item 路径且没找到翻译，尝试用 block 路径
           if (!baseTranslation && baseKey.startsWith('item.minecraft.')) {
             const blockBaseKey = baseKey.replace('item.minecraft.', 'block.minecraft.');
             baseTranslation = languageMap[blockBaseKey];
           }
-          
+
           if (baseTranslation) {
             if (suffixes.length > 0) {
               cache[currentPath] = `${baseTranslation}_${suffixes.join('_')}`;
@@ -358,7 +441,7 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
         }
       }
     }
-    
+
     // 递归处理子节点
     if (node.children) {
       node.children.forEach(child => {
@@ -366,7 +449,7 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
         Object.assign(cache, childCache);
       });
     }
-    
+
     return cache;
   }, [languageMap]);
 
@@ -382,7 +465,7 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
         setLanguageMap({});
       }
     };
-    
+
     loadMap();
   }, []);
 
@@ -390,13 +473,13 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     if (fileTree && Object.keys(languageMap).length > 0) {
       console.log('[语言映射] 开始预计算翻译缓存...');
       const startTime = performance.now();
-      
+
       const cache = precomputeTranslations(fileTree, '', true);
       setTranslationCache(cache);
-      
+
       const duration = (performance.now() - startTime).toFixed(2);
       console.log(`[语言映射] 翻译缓存完成！耗时: ${duration}ms, 缓存条目: ${Object.keys(cache).length}`);
-      
+
       // 调试
       const sampleKeys = Object.keys(cache).slice(0, 5);
       console.log('[语言映射] 缓存示例键:', sampleKeys);
@@ -407,17 +490,17 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     const loadFileTree = async () => {
       console.log('[性能] 开始加载文件树...');
       const startTime = performance.now();
-      
+
       try {
         const tree = await invoke<FileTreeNode>('get_file_tree');
         const endTime = performance.now();
         const duration = (endTime - startTime).toFixed(2);
-        
+
         console.log(`[性能]  文件树加载完成! 耗时: ${duration}ms`);
         console.log(`[性能] 文件树根节点:`, tree);
-        
+
         setFileTree(tree);
-        
+
         // 启动积极预加载整个资源包
         setIsPreloading(true);
         invoke('preload_folder_aggressive', { folderPath: '' })
@@ -436,13 +519,13 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
         alert(`加载文件树失败: ${error}`);
       }
     };
-    
+
     loadFileTree();
     updateSizeStats();
-    
+
     // 每30秒更新一次大小统计
     const interval = setInterval(updateSizeStats, 30000);
-    
+
     // 清理缓存
     return () => {
       clearInterval(interval);
@@ -528,12 +611,11 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
     setIsLoading(true);
     try {
       const extension = filePath.split('.').pop()?.toLowerCase();
-      
       let content = '';
-      if (['mcmeta', 'json', 'txt', 'md', 'yml', 'yaml'].includes(extension || '')) {
+      if (['mcmeta', 'json', 'txt', 'md', 'yml', 'yaml', 'lang'].includes(extension || '')) {
         content = await readFileContent(filePath);
       }
-      
+
       return content;
     } catch (error) {
       console.error('加载文件失败:', error);
@@ -543,61 +625,61 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
       setIsLoading(false);
     }
   }, []);
-const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolean = false, lineNumber?: number) => {
-  console.log(`[性能-打开文件]  开始: ${filePath}${lineNumber ? ` (行号: ${lineNumber})` : ''}`);
-  const startTime = performance.now();
-  
-  const existingTabIndex = openTabs.findIndex(tab => tab.path === filePath);
-  
-  if (existingTabIndex >= 0) {
-    const duration = (performance.now() - startTime).toFixed(2);
-    console.log(`[性能-打开文件]  切换到已打开的标签! 耗时: ${duration}ms`);
-    
-    const newTabs = [...openTabs];
-    let needsUpdate = false;
-    
-    if (forceTextMode && !openTabs[existingTabIndex].forceTextMode) {
-      newTabs[existingTabIndex] = {
-        ...newTabs[existingTabIndex],
-        forceTextMode: true
-      };
-      needsUpdate = true;
-      
-      if (!newTabs[existingTabIndex].content) {
-        try {
-          const content = await readFileContent(filePath);
-          newTabs[existingTabIndex].content = content;
-        } catch (error) {
-          console.error('加载文件内容失败:', error);
+  const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolean = false, lineNumber?: number) => {
+    console.log(`[性能-打开文件]  开始: ${filePath}${lineNumber ? ` (行号: ${lineNumber})` : ''}`);
+    const startTime = performance.now();
+
+    const existingTabIndex = openTabs.findIndex(tab => tab.path === filePath);
+
+    if (existingTabIndex >= 0) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.log(`[性能-打开文件]  切换到已打开的标签! 耗时: ${duration}ms`);
+
+      const newTabs = [...openTabs];
+      let needsUpdate = false;
+
+      if (forceTextMode && !openTabs[existingTabIndex].forceTextMode) {
+        newTabs[existingTabIndex] = {
+          ...newTabs[existingTabIndex],
+          forceTextMode: true
+        };
+        needsUpdate = true;
+
+        if (!newTabs[existingTabIndex].content) {
+          try {
+            const content = await readFileContent(filePath);
+            newTabs[existingTabIndex].content = content;
+          } catch (error) {
+            console.error('加载文件内容失败:', error);
+          }
         }
       }
+
+      // 更新行号
+      if (lineNumber !== undefined) {
+        newTabs[existingTabIndex] = {
+          ...newTabs[existingTabIndex],
+          initialLine: lineNumber
+        };
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        setOpenTabs(newTabs);
+      }
+
+      setActiveTabIndex(existingTabIndex);
+      setCurrentFileHasChanges(false);
+
+      return;
     }
-    
-    // 更新行号
-    if (lineNumber !== undefined) {
-      newTabs[existingTabIndex] = {
-        ...newTabs[existingTabIndex],
-        initialLine: lineNumber
-      };
-      needsUpdate = true;
-    }
-    
-    if (needsUpdate) {
-      setOpenTabs(newTabs);
-    }
-    
-    setActiveTabIndex(existingTabIndex);
-    setCurrentFileHasChanges(false);
-    
-    return;
-  }
-  
-  // 检查是否是图片
-  const ext = filePath.split('.').pop()?.toLowerCase();
+
+    // 检查是否是图片
+    const ext = filePath.split('.').pop()?.toLowerCase();
     const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext || '');
-    
+
     console.log(`[性能-打开文件] 文件类型: ${isImage ? '图片' : '文本'}, 强制文本模式: ${forceTextMode}`);
-    
+
     let content = '';
     if (!isImage || forceTextMode) {
       const loadStart = performance.now();
@@ -610,10 +692,10 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
       const loadDuration = (performance.now() - loadStart).toFixed(2);
       console.log(`[性能-打开文件]   ├─ 文本内容加载耗时: ${loadDuration}ms`);
     }
-    
+
     const duration = (performance.now() - startTime).toFixed(2);
     console.log(`[性能-打开文件]  完成! 总耗时: ${duration}ms`);
-    
+
     const newTab: OpenTab = {
       path: filePath,
       content: content,
@@ -621,11 +703,11 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
       forceTextMode: forceTextMode,
       initialLine: lineNumber,
     };
-    
+
     setOpenTabs([...openTabs, newTab]);
     setActiveTabIndex(openTabs.length);
     setCurrentFileHasChanges(false);
-    
+
     if (!isImage || forceTextMode) {
       setImageInfo(null);
     }
@@ -635,25 +717,25 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
     if (e) {
       e.stopPropagation();
     }
-    
+
     const tab = openTabs[index];
-    
+
     const isPng = tab.path.split('.').pop()?.toLowerCase() === 'png';
     const hasUnsavedChanges = (index === activeTabIndex && currentFileHasChanges) || tab.isDirty;
-    
+
     if (hasUnsavedChanges) {
       if (!confirm(`${tab.path.split('/').pop()} 有未保存的更改，确定要关闭吗？`)) {
         return;
       }
     }
-    
+
     const newTabs = openTabs.filter((_, i) => i !== index);
     setOpenTabs(newTabs);
-    
+
     if (index === activeTabIndex) {
       setCurrentFileHasChanges(false);
     }
-    
+
     if (activeTabIndex === index) {
       setActiveTabIndex(index > 0 ? index - 1 : (newTabs.length > 0 ? 0 : -1));
     } else if (activeTabIndex > index) {
@@ -686,10 +768,10 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
 
   const handleFileSave = async (content: string) => {
     if (!selectedFile || activeTabIndex < 0) return;
-    
+
     try {
       await writeFileContent(selectedFile, content);
-      
+
       const newTabs = [...openTabs];
       newTabs[activeTabIndex] = {
         ...newTabs[activeTabIndex],
@@ -727,7 +809,7 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
     if (hex === '' || hex === '#') {
       return;
     }
-    
+
     const cleanHex = hex.replace(/[^0-9A-Fa-f#]/g, '');
     if (cleanHex.length <= 7) {
       const rgb = hexToRgb(cleanHex);
@@ -736,12 +818,12 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
       }
     }
   };
-  
+
   const handleHexBlur = (hex: string) => {
     if (hex === '' || hex === '#') {
       return;
     }
-    
+
     const rgb = hexToRgb(hex);
     if (rgb) {
       setSelectedColor(prev => ({ ...prev, ...rgb }));
@@ -767,11 +849,11 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
   const handleClearHistory = async () => {
     try {
       const packDir = await invoke<string>('get_current_pack_path');
-      
+
       const stats = await invoke<any>('get_history_stats', {
         packDir: packDir
       });
-      
+
       setHistoryStats({
         totalSize: stats.total_size || 0,
         fileCount: Object.keys(stats.files || {}).length
@@ -786,15 +868,15 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
   const confirmClearHistory = async () => {
     try {
       const packDir = await invoke<string>('get_current_pack_path');
-      
+
       await invoke('clear_all_history', {
         packDir: packDir
       });
-      
+
       setShowClearHistoryDialog(false);
       setHistoryStats(null);
       alert('历史记录已清理');
-      
+
       await refreshFileTree();
     } catch (error) {
       console.error('清理历史记录失败:', error);
@@ -806,74 +888,74 @@ const openFileInTab = useCallback(async (filePath: string, forceTextMode: boolea
     if (tool === 'brush' || tool === 'pencil' || tool === 'eraser') {
       e.preventDefault();
       e.stopPropagation();
-      
+
       const menuWidth = 280;
       const menuHeight = 250;
-      
+
       let x = e.clientX;
       let y = e.clientY;
-      
+
       if (x + menuWidth > window.innerWidth) {
         x = window.innerWidth - menuWidth - 10;
       }
-      
+
       if (y + menuHeight > window.innerHeight) {
         y = window.innerHeight - menuHeight - 10;
       }
-      
+
       x = Math.max(10, x);
       y = Math.max(10, y);
-      
+
       setToolSizeMenuPos({ x, y });
       setShowToolSizeMenu(true);
     }
   };
-const loadFolderChildren = useCallback(async (folderPath: string) => {
-  if (loadingFolders.current.has(folderPath)) {
-    console.log(`[性能-防抖] ⏭️ 跳过重复加载: ${folderPath}`);
-    return [];
-  }
-  
-  console.log(`[性能-文件夹]  开始加载: ${folderPath}`);
-  const startTime = performance.now();
-  
-  // 标记为正在加载
-  loadingFolders.current.add(folderPath);
-  
-  try {
-    const invokeStart = performance.now();
-    const children = await invoke<FileTreeNode[]>('load_folder_children', {
-      folderPath: folderPath
-    });
-    const invokeEnd = performance.now();
-    const invokeDuration = (invokeEnd - invokeStart).toFixed(2);
-    
-    const endTime = performance.now();
-    const totalDuration = (endTime - startTime).toFixed(2);
-    
-    console.log(`[性能-文件夹]  加载完成: ${folderPath}`);
-    console.log(`  ├─ Tauri调用耗时: ${invokeDuration}ms`);
-    console.log(`  ├─ 总耗时: ${totalDuration}ms`);
-    console.log(`  └─ 子项数量: ${children.length}`);
-    
-    return children;
-  } catch (error) {
-    const endTime = performance.now();
-    const duration = (endTime - startTime).toFixed(2);
-    console.error(`[性能-文件夹]  加载失败: ${folderPath}, 耗时: ${duration}ms`, error);
-    return [];
-  } finally {
-    loadingFolders.current.delete(folderPath);
-  }
-}, []);
+  const loadFolderChildren = useCallback(async (folderPath: string) => {
+    if (loadingFolders.current.has(folderPath)) {
+      console.log(`[性能-防抖] ⏭️ 跳过重复加载: ${folderPath}`);
+      return [];
+    }
+
+    console.log(`[性能-文件夹]  开始加载: ${folderPath}`);
+    const startTime = performance.now();
+
+    // 标记为正在加载
+    loadingFolders.current.add(folderPath);
+
+    try {
+      const invokeStart = performance.now();
+      const children = await invoke<FileTreeNode[]>('load_folder_children', {
+        folderPath: folderPath
+      });
+      const invokeEnd = performance.now();
+      const invokeDuration = (invokeEnd - invokeStart).toFixed(2);
+
+      const endTime = performance.now();
+      const totalDuration = (endTime - startTime).toFixed(2);
+
+      console.log(`[性能-文件夹]  加载完成: ${folderPath}`);
+      console.log(`  ├─ Tauri调用耗时: ${invokeDuration}ms`);
+      console.log(`  ├─ 总耗时: ${totalDuration}ms`);
+      console.log(`  └─ 子项数量: ${children.length}`);
+
+      return children;
+    } catch (error) {
+      const endTime = performance.now();
+      const duration = (endTime - startTime).toFixed(2);
+      console.error(`[性能-文件夹]  加载失败: ${folderPath}, 耗时: ${duration}ms`, error);
+      return [];
+    } finally {
+      loadingFolders.current.delete(folderPath);
+    }
+  }, []);
 
   const toggleFolder = useCallback(async (path: string, node: FileTreeNode) => {
     const childCount = node.children?.length || 0;
     console.log(`[性能-文件夹展开]  点击文件夹: ${path}, 当前展开状态: ${expandedFolders.has(path)}, loaded: ${node.loaded}, children: ${childCount}`);
-    
+
     const startTime = performance.now();
     const newExpanded = new Set(expandedFolders);
-    
+
     if (newExpanded.has(path)) {
       console.log(`[性能-文件夹展开] 折叠文件夹: ${path}`);
       newExpanded.delete(path);
@@ -881,7 +963,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
     } else {
       console.log(`[性能-文件夹展开] 展开文件夹: ${path}`);
       newExpanded.add(path);
-      
+
       if (node.is_dir && !node.loaded && (!node.children || node.children.length === 0)) {
         console.log(`[性能-文件夹展开] 需要懒加载子节点: ${path}`);
         const children = await loadFolderChildren(path);
@@ -895,7 +977,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
             }
             return n;
           };
-          
+
           if (fileTree) {
             setFileTree(updateNodeChildren(fileTree));
           }
@@ -903,7 +985,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
       } else {
         console.log(`[性能-文件夹展开] 子节点已加载，直接展开: ${path}`);
       }
-      
+
       if (childCount > 100) {
         console.log(`[性能-文件夹展开] ️ 大量子节点 (${childCount})，使用延迟渲染`);
         setTimeout(() => {
@@ -944,6 +1026,17 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
 
     const extension = getFileExtension(selectedFile);
     const fileName = selectedFile.split('/').pop() || '';
+
+    // 音频文件播放器
+    if (['ogg', 'wav', 'mp3'].includes(extension)) {
+      return (
+        <AudioPlayer
+          filePath={selectedFile}
+          fileName={fileName}
+          extension={extension}
+        />
+      );
+    }
 
     // 图片文件
     if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) {
@@ -987,7 +1080,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
       );
     }
 
-    if (['json', 'txt', 'md', 'yml', 'yaml'].includes(extension)) {
+    if (['json', 'txt', 'md', 'yml', 'yaml', 'lang'].includes(extension)) {
       const currentTab = openTabs[activeTabIndex];
       return (
         <TextEditor
@@ -1002,415 +1095,360 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
           readOnly={false}
           initialLine={currentTab?.initialLine}
           onDownloadSounds={selectedFile === 'assets/minecraft/sounds/sounds.json' ? handleDownloadSounds : undefined}
+          onRefreshFileTree={refreshFileTree}
         />
       );
-    }
+  }
 
-    // 检查是否强制文本模式
-    const currentTab = openTabs[activeTabIndex];
-    if (currentTab?.forceTextMode) {
-      return (
-        <TextEditor
-          content={fileContent}
-          filePath={selectedFile}
-          onChange={(content) => {
-            updateTabContent(content);
-          }}
-          onSave={() => {
-            markTabAsSaved();
-          }}
-          readOnly={false}
-          initialLine={currentTab?.initialLine}
-        />
-      );
-    }
-
+  // 检查是否强制文本模式
+  const currentTab = openTabs[activeTabIndex];
+  if (currentTab?.forceTextMode) {
     return (
-      <div className="unsupported-file">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-        </svg>
-        <p>不支持的文件类型</p>
-        <span className="file-info">{fileName}</span>
-        <button
-          className="btn-primary"
-          onClick={() => openFileInTab(selectedFile, true)}
-          style={{ marginTop: '1rem' }}
-        >
-          用文本编辑器打开
-        </button>
-      </div>
+      <TextEditor
+        content={fileContent}
+        filePath={selectedFile}
+        onChange={(content) => {
+          updateTabContent(content);
+        }}
+        onSave={() => {
+          markTabAsSaved();
+        }}
+        readOnly={false}
+        initialLine={currentTab?.initialLine}
+        onRefreshFileTree={refreshFileTree}
+      />
     );
-  };
+  }
 
-  const handleContextMenu = async (e: React.MouseEvent, path: string, type: 'file' | 'folder') => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setContextMenuPath(path);
-    
-    if (path === 'assets/minecraft/sounds') {
+  return (
+    <div className="unsupported-file">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+      </svg>
+      <p>不支持的文件类型</p>
+      <span className="file-info">{fileName}</span>
+      <button
+        className="btn-primary"
+        onClick={() => openFileInTab(selectedFile, true)}
+        style={{ marginTop: '1rem' }}
+      >
+        用文本编辑器打开
+      </button>
+    </div>
+  );
+};
+
+const handleContextMenu = async (e: React.MouseEvent, path: string, type: 'file' | 'folder') => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  setContextMenuPath(path);
+
+  if (path === 'assets/minecraft/sounds') {
+    try {
+      const soundsJsonPath = `${path}/sounds.json`;
+      await invoke('read_file_content', { filePath: soundsJsonPath });
+      setSoundsJsonExists(true);
+    } catch {
+      setSoundsJsonExists(false);
+    }
+  }
+
+  const menuWidth = 200;
+  const estimatedItemHeight = 32;
+  const estimatedItemCount = type === 'folder' ? 9 : 5;
+  const menuHeight = estimatedItemCount * estimatedItemHeight + 10;
+
+  let x = e.clientX;
+  let y = e.clientY;
+
+  if (x + menuWidth > window.innerWidth) {
+    x = window.innerWidth - menuWidth - 10;
+  }
+
+  if (y + menuHeight > window.innerHeight) {
+    y = window.innerHeight - menuHeight - 10;
+  }
+
+  if (y < 10) {
+    y = 10;
+  }
+
+  if (x < 10) {
+    x = 10;
+  }
+
+  setContextMenu({
+    x,
+    y,
+    path,
+    type,
+  });
+};
+
+// 开始重命名
+const startRename = (path: string) => {
+  const fileName = path.split('/').pop() || '';
+  setRenamingPath(path);
+  setRenameValue(fileName);
+  setContextMenu(null);
+  // 聚焦输入框
+  setTimeout(() => {
+    if (renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, 0);
+};
+
+// 完成重命名
+const finishRename = async () => {
+  if (renamingPath && renameValue.trim()) {
+    const pathParts = renamingPath.split('/');
+    const oldName = pathParts[pathParts.length - 1];
+
+    if (oldName !== renameValue.trim()) {
+      pathParts[pathParts.length - 1] = renameValue.trim();
+      const newPath = pathParts.join('/');
+
       try {
-        const soundsJsonPath = `${path}/sounds.json`;
-        await invoke('read_file_content', { filePath: soundsJsonPath });
-        setSoundsJsonExists(true);
-      } catch {
-        setSoundsJsonExists(false);
+        await invoke('rename_file', {
+          oldPath: renamingPath,
+          newPath: newPath
+        });
+        await refreshFileTree();
+      } catch (error) {
+        alert(`重命名失败: ${error}`);
       }
     }
-    
-    const menuWidth = 200;
-    const estimatedItemHeight = 32;
-    const estimatedItemCount = type === 'folder' ? 9 : 5;
-    const menuHeight = estimatedItemCount * estimatedItemHeight + 10;
-    
-    let x = e.clientX;
-    let y = e.clientY;
-    
-    if (x + menuWidth > window.innerWidth) {
-      x = window.innerWidth - menuWidth - 10;
-    }
-    
-    if (y + menuHeight > window.innerHeight) {
-      y = window.innerHeight - menuHeight - 10;
-    }
-    
-    if (y < 10) {
-      y = 10;
-    }
-    
-    if (x < 10) {
-      x = 10;
-    }
-    
-    setContextMenu({
-      x,
-      y,
-      path,
-      type,
+  }
+  setRenamingPath(null);
+  setRenameValue("");
+};
+
+// 取消重命名
+const cancelRename = () => {
+  setRenamingPath(null);
+  setRenameValue("");
+};
+
+const refreshFileTree = useCallback(async () => {
+  try {
+    const tree = await invoke<FileTreeNode>('get_file_tree');
+    setFileTree(tree);
+  } catch (error) {
+    console.error('刷新文件树失败:', error);
+  }
+}, []);
+
+const handleDownloadSounds = async () => {
+  // 显示下载设置对话框
+  setShowDownloadSettings(true);
+};
+
+const startDownload = async (threads: number) => {
+  try {
+    const taskId = await invoke<string>('download_minecraft_sounds', {
+      concurrentDownloads: threads
     });
-  };
+    console.log('下载任务已创建:', taskId, '线程数:', threads);
 
-  // 开始重命名
-  const startRename = (path: string) => {
-    const fileName = path.split('/').pop() || '';
-    setRenamingPath(path);
-    setRenameValue(fileName);
-    setContextMenu(null);
-    // 聚焦输入框
-    setTimeout(() => {
-      if (renameInputRef.current) {
-        renameInputRef.current.focus();
-        renameInputRef.current.select();
+    setShowDownloadSettings(false);
+
+    setShowDownloadDetails(true);
+  } catch (error) {
+    console.error('创建下载任务失败:', error);
+    alert(`下载失败: ${error}`);
+  }
+};
+
+const handleMenuAction = async (action: string) => {
+  if (!contextMenu) return;
+
+  switch (action) {
+    case 'openInExplorer':
+      try {
+        await invoke('open_in_explorer', { filePath: contextMenu.path });
+      } catch (error) {
+        alert(`打开资源管理器失败: ${error}`);
       }
-    }, 0);
-  };
-
-  // 完成重命名
-  const finishRename = async () => {
-    if (renamingPath && renameValue.trim()) {
-      const pathParts = renamingPath.split('/');
-      const oldName = pathParts[pathParts.length - 1];
-      
-      if (oldName !== renameValue.trim()) {
-        pathParts[pathParts.length - 1] = renameValue.trim();
-        const newPath = pathParts.join('/');
-        
+      break;
+    case 'downloadSounds':
+      await handleDownloadSounds();
+      break;
+    case 'delete':
+      if (confirm(`确定要删除 ${contextMenu.path} 吗？`)) {
         try {
-          await invoke('rename_file', {
-            oldPath: renamingPath,
-            newPath: newPath
-          });
+          await invoke('delete_file', { filePath: contextMenu.path });
           await refreshFileTree();
         } catch (error) {
-          alert(`重命名失败: ${error}`);
+          alert(`删除失败: ${error}`);
         }
       }
-    }
-    setRenamingPath(null);
-    setRenameValue("");
-  };
-
-  // 取消重命名
-  const cancelRename = () => {
-    setRenamingPath(null);
-    setRenameValue("");
-  };
-
-  const refreshFileTree = useCallback(async () => {
-    try {
-      const tree = await invoke<FileTreeNode>('get_file_tree');
-      setFileTree(tree);
-    } catch (error) {
-      console.error('刷新文件树失败:', error);
-    }
-  }, []);
-
-  const handleDownloadSounds = async () => {
-    // 显示下载设置对话框
-    setShowDownloadSettings(true);
-  };
-
-  const startDownload = async (threads: number) => {
-    try {
-      const taskId = await invoke<string>('download_minecraft_sounds', {
-        concurrentDownloads: threads
-      });
-      console.log('下载任务已创建:', taskId, '线程数:', threads);
-      
-      setShowDownloadSettings(false);
-      
-      setShowDownloadDetails(true);
-    } catch (error) {
-      console.error('创建下载任务失败:', error);
-      alert(`下载失败: ${error}`);
-    }
-  };
-
-  const handleMenuAction = async (action: string) => {
-    if (!contextMenu) return;
-    
-    switch (action) {
-      case 'downloadSounds':
-        await handleDownloadSounds();
-        break;
-      case 'delete':
-        if (confirm(`确定要删除 ${contextMenu.path} 吗？`)) {
-          try {
-            await invoke('delete_file', { filePath: contextMenu.path });
-            await refreshFileTree();
-          } catch (error) {
-            alert(`删除失败: ${error}`);
-          }
-        }
-        break;
-      case 'rename':
-        startRename(contextMenu.path);
-        break;
-      case 'newFile':
-        const fileName = prompt('输入文件名:');
-        if (fileName) {
-          try {
-            const filePath = contextMenu.path ? `${contextMenu.path}/${fileName}` : fileName;
-            await invoke('create_new_file', {
-              filePath: filePath,
-              content: ''
-            });
-            await refreshFileTree();
-          } catch (error) {
-            alert(`创建文件失败: ${error}`);
-          }
-        }
-        break;
-      case 'newFolder':
-        const folderName = prompt('输入文件夹名:');
-        if (folderName) {
-          try {
-            const folderPath = contextMenu.path ? `${contextMenu.path}/${folderName}` : folderName;
-            await invoke('create_new_folder', { folderPath: folderPath });
-            await refreshFileTree();
-          } catch (error) {
-            alert(`创建文件夹失败: ${error}`);
-          }
-        }
-        break;
-      case 'newPng':
-        setPngCreatorFolder(contextMenu.path);
-        setShowPngCreator(true);
-        break;
-      case 'newSoundsJson':
+      break;
+    case 'rename':
+      startRename(contextMenu.path);
+      break;
+    case 'newFile':
+      const fileName = prompt('输入文件名:');
+      if (fileName) {
         try {
-          const filePath = contextMenu.path ? `${contextMenu.path}/sounds.json` : 'sounds.json';
-          
-          const packPath = await invoke<string>('get_current_pack_path');
-          const fullPath = `${packPath}/${filePath}`;
-          
-          try {
-            await invoke('read_file_content', { filePath: filePath });
-            alert('sounds.json 文件已存在！');
-            openFileInTab(filePath);
-            break;
-          } catch {}
-          
-          const defaultContent = JSON.stringify({}, null, 2);
+          const filePath = contextMenu.path ? `${contextMenu.path}/${fileName}` : fileName;
           await invoke('create_new_file', {
             filePath: filePath,
-            content: defaultContent
+            content: ''
           });
           await refreshFileTree();
-          // 自动打开创建的文件
-          openFileInTab(filePath);
         } catch (error) {
-          alert(`创建 sounds.json 失败: ${error}`);
-        }
-        break;
-      case 'copy':
-        console.log('复制:', contextMenu.path);
-        break;
-      case 'paste':
-        console.log('粘贴到:', contextMenu.path);
-        break;
-    }
-    
-    setContextMenu(null);
-    setContextMenuPath(null);
-  };
-
-  const handleCreatePng = async (width: number, height: number, fileName: string) => {
-    try {
-      const filePath = pngCreatorFolder ? `${pngCreatorFolder}/${fileName}` : fileName;
-      await invoke('create_transparent_png', {
-        filePath: filePath,
-        width: width,
-        height: height
-      });
-      await refreshFileTree();
-      setShowPngCreator(false);
-      
-      openFileInTab(filePath);
-    } catch (error) {
-      alert(`创建PNG失败: ${error}`);
-    }
-  };
-
-  const FileTreeItem = memo(({
-    node,
-    path,
-    level,
-    isRoot,
-    isLast,
-    parentLines
-  }: {
-    node: FileTreeNode;
-    path: string;
-    level: number;
-    isRoot: boolean;
-    isLast: boolean;
-    parentLines: boolean[];
-  }) => {
-    // 过滤掉 .history 文件夹
-    if (node.name === '.history') {
-      return null;
-    }
-    
-    const currentPath = isRoot ? "" : (path ? `${path}/${node.name}` : node.name);
-    const isExpanded = expandedFolders.has(currentPath) || isRoot;
-    const isRenaming = renamingPath === currentPath;
-
-    const renderTreeLines = () => {
-      const lines: React.ReactNode[] = [];
-      
-      for (let i = 0; i < level; i++) {
-        if (parentLines[i]) {
-          lines.push(
-            <span
-              key={`vline-${i}`}
-              className="tree-vline"
-              style={{
-                left: `${i * 20 + 10}px`
-              }}
-            />
-          );
+          alert(`创建文件失败: ${error}`);
         }
       }
-      
-      if (level > 0) {
+      break;
+    case 'newFolder':
+      const folderName = prompt('输入文件夹名:');
+      if (folderName) {
+        try {
+          const folderPath = contextMenu.path ? `${contextMenu.path}/${folderName}` : folderName;
+          await invoke('create_new_folder', { folderPath: folderPath });
+          await refreshFileTree();
+        } catch (error) {
+          alert(`创建文件夹失败: ${error}`);
+        }
+      }
+      break;
+    case 'newPng':
+      setPngCreatorFolder(contextMenu.path);
+      setShowPngCreator(true);
+      break;
+    case 'newSoundsJson':
+      try {
+        const filePath = contextMenu.path ? `${contextMenu.path}/sounds.json` : 'sounds.json';
+
+        const packPath = await invoke<string>('get_current_pack_path');
+        const fullPath = `${packPath}/${filePath}`;
+
+        try {
+          await invoke('read_file_content', { filePath: filePath });
+          alert('sounds.json 文件已存在！');
+          openFileInTab(filePath);
+          break;
+        } catch {}
+
+        const defaultContent = JSON.stringify({}, null, 2);
+        await invoke('create_new_file', {
+          filePath: filePath,
+          content: defaultContent
+        });
+        await refreshFileTree();
+        // 自动打开创建的文件
+        openFileInTab(filePath);
+      } catch (error) {
+        alert(`创建 sounds.json 失败: ${error}`);
+      }
+      break;
+    case 'copy':
+      console.log('复制:', contextMenu.path);
+      break;
+    case 'paste':
+      console.log('粘贴到:', contextMenu.path);
+      break;
+  }
+
+  setContextMenu(null);
+  setContextMenuPath(null);
+};
+
+const handleCreatePng = async (width: number, height: number, fileName: string) => {
+  try {
+    const filePath = pngCreatorFolder ? `${pngCreatorFolder}/${fileName}` : fileName;
+    await invoke('create_transparent_png', {
+      filePath: filePath,
+      width: width,
+      height: height
+    });
+    await refreshFileTree();
+    setShowPngCreator(false);
+
+    openFileInTab(filePath);
+  } catch (error) {
+    alert(`创建PNG失败: ${error}`);
+  }
+};
+
+const FileTreeItem = memo(({
+  node,
+  path,
+  level,
+  isRoot,
+  isLast,
+  parentLines
+}: {
+  node: FileTreeNode;
+  path: string;
+  level: number;
+  isRoot: boolean;
+  isLast: boolean;
+  parentLines: boolean[];
+}) => {
+  // 过滤掉 .history 文件夹
+  if (node.name === '.history') {
+    return null;
+  }
+
+  const currentPath = isRoot ? "" : (path ? `${path}/${node.name}` : node.name);
+  const isExpanded = expandedFolders.has(currentPath) || isRoot;
+  const isRenaming = renamingPath === currentPath;
+
+  const renderTreeLines = () => {
+    const lines: React.ReactNode[] = [];
+
+    for (let i = 0; i < level; i++) {
+      if (parentLines[i]) {
         lines.push(
           <span
-            key="connector"
-            className={`tree-connector ${isLast ? 'last' : ''}`}
+            key={`vline-${i}`}
+            className="tree-vline"
             style={{
-              left: `${(level - 1) * 20 + 10}px`
+              left: `${i * 20 + 10}px`
             }}
           />
         );
       }
-      
-      return lines;
-    };
+    }
 
-    if (node.is_dir) {
-      const children = node.children || [];
-      // 过滤掉 .history 文件夹
-      const filteredChildren = children.filter(child => child.name !== '.history');
-      const folders = filteredChildren.filter(child => child.is_dir);
-      const files = filteredChildren.filter(child => !child.is_dir);
-      const sortedChildren = [...folders, ...files];
-      
-      return (
-        <div className="tree-node">
-          <div
-            className={`tree-item folder ${isExpanded ? 'expanded' : ''} ${contextMenuPath === currentPath ? 'context-selected' : ''}`}
-            style={{ paddingLeft: `${level * 20 + 24}px` }}
-            onClick={(e) => {
-              if (!isRenaming) toggleFolder(currentPath, node);
-            }}
-            onContextMenu={(e) => handleContextMenu(e, currentPath, 'folder')}
-            onDoubleClick={(e) => {
-              if (!isRenaming) {
-                e.stopPropagation();
-                startRename(currentPath);
-              }
-            }}
-          >
-            {renderTreeLines()}
-            <span className="folder-icon">
-              {isExpanded ? <FolderOpenIcon className="tree-icon" /> : <FolderIcon className="tree-icon" />}
-            </span>
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                type="text"
-                className="rename-input"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onBlur={finishRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') finishRename();
-                  if (e.key === 'Escape') cancelRename();
-                }}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="item-name" title={node.name}>
-                {getDisplayName(node.name, currentPath)}
-              </span>
-            )}
-          </div>
-          {isExpanded && sortedChildren.length > 0 && (
-            <div className="tree-children">
-              {sortedChildren.map((child, index) => {
-                const newParentLines = [...parentLines];
-                if (level > 0) {
-                  newParentLines[level - 1] = !isLast;
-                }
-                return (
-                  <FileTreeItem
-                    key={child.path || `${currentPath}/${child.name}`}
-                    node={child}
-                    path={currentPath}
-                    level={level + 1}
-                    isRoot={false}
-                    isLast={index === sortedChildren.length - 1}
-                    parentLines={newParentLines}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
+    if (level > 0) {
+      lines.push(
+        <span
+          key="connector"
+          className={`tree-connector ${isLast ? 'last' : ''}`}
+          style={{
+            left: `${(level - 1) * 20 + 10}px`
+          }}
+        />
       );
-    } else {
-      return (
+    }
+
+    return lines;
+  };
+
+  if (node.is_dir) {
+    const children = node.children || [];
+    // 过滤掉 .history 文件夹
+    const filteredChildren = children.filter(child => child.name !== '.history');
+    const folders = filteredChildren.filter(child => child.is_dir);
+    const files = filteredChildren.filter(child => !child.is_dir);
+    const sortedChildren = [...folders, ...files];
+
+    return (
+      <div className="tree-node">
         <div
-          className={`tree-item file ${selectedFile === currentPath ? "selected" : ""} ${contextMenuPath === currentPath ? 'context-selected' : ''}`}
+          className={`tree-item folder ${isExpanded ? 'expanded' : ''} ${contextMenuPath === currentPath ? 'context-selected' : ''}`}
           style={{ paddingLeft: `${level * 20 + 24}px` }}
           onClick={(e) => {
-            if (!isRenaming) openFileInTab(currentPath);
+            if (!isRenaming) toggleFolder(currentPath, node);
           }}
-          onContextMenu={(e) => handleContextMenu(e, currentPath, 'file')}
+          onContextMenu={(e) => handleContextMenu(e, currentPath, 'folder')}
           onDoubleClick={(e) => {
             if (!isRenaming) {
               e.stopPropagation();
@@ -1419,7 +1457,9 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
           }}
         >
           {renderTreeLines()}
-          <span className="file-icon"><FileIcon className="tree-icon" /></span>
+          <span className="folder-icon">
+            {isExpanded ? <FolderOpenIcon className="tree-icon" /> : <FolderIcon className="tree-icon" />}
+          </span>
           {isRenaming ? (
             <input
               ref={renameInputRef}
@@ -1436,57 +1476,119 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="item-name" title={currentPath}>
+            <span className="item-name" title={node.name}>
               {getDisplayName(node.name, currentPath)}
             </span>
           )}
         </div>
-      );
-    }
-  });
-
-  const renderFileTree = (
-    node: FileTreeNode,
-    path: string = "",
-    level: number = 0,
-    isRoot: boolean = false,
-    isLast: boolean = false,
-    parentLines: boolean[] = []
-  ): React.ReactNode => {
-    // 过滤掉 .history 文件夹
-    if (node.name === '.history') {
-      return null;
-    }
-    
-    return (
-      <FileTreeItem
-        key={node.path || node.name}
-        node={node}
-        path={path}
-        level={level}
-        isRoot={isRoot}
-        isLast={isLast}
-        parentLines={parentLines}
-      />
-    );
-  };
-
-  return (
-    <>
-      <TitleBar
-        packSize={packSize}
-        historySize={historySize}
-        showStats={true}
-        debugMode={debugMode}
-      />
-      <div className="pack-editor">
-        {/* 调整大小指示器 */}
-        {resizeIndicator && (
-          <div className="resize-indicator">
-            {resizeIndicator}
+        {isExpanded && sortedChildren.length > 0 && (
+          <div className="tree-children">
+            {sortedChildren.map((child, index) => {
+              const newParentLines = [...parentLines];
+              if (level > 0) {
+                newParentLines[level - 1] = !isLast;
+              }
+              return (
+                <FileTreeItem
+                  key={child.path || `${currentPath}/${child.name}`}
+                  node={child}
+                  path={currentPath}
+                  level={level + 1}
+                  isRoot={false}
+                  isLast={index === sortedChildren.length - 1}
+                  parentLines={newParentLines}
+                />
+              );
+            })}
           </div>
         )}
-      
+      </div>
+    );
+  } else {
+    return (
+      <div
+        className={`tree-item file ${selectedFile === currentPath ? "selected" : ""} ${contextMenuPath === currentPath ? 'context-selected' : ''}`}
+        style={{ paddingLeft: `${level * 20 + 24}px` }}
+        onClick={(e) => {
+          if (!isRenaming) openFileInTab(currentPath);
+        }}
+        onContextMenu={(e) => handleContextMenu(e, currentPath, 'file')}
+        onDoubleClick={(e) => {
+          if (!isRenaming) {
+            e.stopPropagation();
+            startRename(currentPath);
+          }
+        }}
+      >
+        {renderTreeLines()}
+        <span className="file-icon"><FileIcon className="tree-icon" /></span>
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            type="text"
+            className="rename-input"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={finishRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') finishRename();
+              if (e.key === 'Escape') cancelRename();
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="item-name" title={currentPath}>
+            {getDisplayName(node.name, currentPath)}
+          </span>
+        )}
+      </div>
+    );
+  }
+});
+
+const renderFileTree = (
+  node: FileTreeNode,
+  path: string = "",
+  level: number = 0,
+  isRoot: boolean = false,
+  isLast: boolean = false,
+  parentLines: boolean[] = []
+): React.ReactNode => {
+  // 过滤掉 .history 文件夹
+  if (node.name === '.history') {
+    return null;
+  }
+
+  return (
+    <FileTreeItem
+      key={node.path || node.name}
+      node={node}
+      path={path}
+      level={level}
+      isRoot={isRoot}
+      isLast={isLast}
+      parentLines={parentLines}
+    />
+  );
+};
+
+return (
+  <>
+    <TitleBar
+      packSize={packSize}
+      historySize={historySize}
+      showStats={true}
+      debugMode={debugMode}
+    />
+    <div className="pack-editor">
+      {/* 调整大小指示器 */}
+      {resizeIndicator && (
+        <div className="resize-indicator">
+          {resizeIndicator}
+        </div>
+      )}
+
       {/* 左侧文件树 */}
       <div
         ref={sidebarRef}
@@ -1497,7 +1599,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
           <div className="sidebar-header-left">
             <button className="btn-back" onClick={onClose} title="返回主页">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
             </button>
             <h3>文件</h3>
@@ -1624,7 +1726,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
               setSearchResults(null);
               return;
             }
-            
+
             setIsSearching(true);
             try {
               const results = await searchFiles(query, caseSensitive, useRegex);
@@ -1710,6 +1812,15 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
             </div>
           )}
           <div className="context-menu-divider"></div>
+          <div className="context-menu-item" onClick={() => handleMenuAction('openInExplorer')}>
+            <span className="menu-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </span>
+            <span>用资源管理器打开</span>
+          </div>
+          <div className="context-menu-divider"></div>
           <div className="context-menu-item danger" onClick={() => handleMenuAction('delete')}>
             <span className="menu-icon"><DeleteIcon /></span>
             <span>删除</span>
@@ -1729,7 +1840,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
             className="toolbar-resizer"
             onMouseDown={() => setIsResizingToolbar(true)}
           />
-          
+
           {/* 工具网格 */}
           <div className="toolbar-section">
             <div className="tools-grid">
@@ -1981,7 +2092,7 @@ const loadFolderChildren = useCallback(async (folderPath: string) => {
           </div>
         </>
       )}
-      </div>
-    </>
-  );
+    </div>
+  </>
+);
 }

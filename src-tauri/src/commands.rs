@@ -297,6 +297,13 @@ pub async fn write_file_content(
         }
     };
 
+    // 创建父目录
+    if let Some(parent) = full_path.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
     tokio::fs::write(&full_path, content)
         .await
         .map_err(|e| format!("Failed to write file: {}", e))
@@ -1357,7 +1364,7 @@ fn collect_searchable_files(base_path: &Path) -> Result<Vec<PathBuf>, String> {
             if let Some(ext) = entry.path().extension() {
                 let ext_str = ext.to_string_lossy().to_lowercase();
                 // 支持的文件类型
-                if matches!(ext_str.as_str(), "json" | "mcmeta" | "txt" | "png") {
+                if matches!(ext_str.as_str(), "json" | "mcmeta" | "txt" | "png" | "lang") {
                     files.push(entry.path().to_path_buf());
                 }
             }
@@ -1431,15 +1438,15 @@ fn check_chinese_match(
     query: &str,
     case_sensitive: bool,
     language_map: &std::collections::HashMap<String, String>,
-) -> bool {
+) -> Option<(usize, usize)> {
     // 如果映射表为空,直接返回
     if language_map.is_empty() {
-        return false;
+        return None;
     }
     
     // 只在查询包含中文时才进行映射搜索
     if !query.chars().any(|c| (c as u32) > 0x4E00 && (c as u32) < 0x9FA5) {
-        return false;
+        return None;
     }
     
     let relative_path = file_path
@@ -1470,8 +1477,8 @@ fn check_chinese_match(
                     query.to_lowercase()
                 };
                 
-                if search_translation.contains(&search_query) {
-                    return true;
+                if let Some(pos) = search_translation.find(&search_query) {
+                    return Some((pos, pos + query.len()));
                 }
             }
         }
@@ -1493,14 +1500,14 @@ fn check_chinese_match(
                     query.to_lowercase()
                 };
                 
-                if search_translation.contains(&search_query) {
-                    return true;
+                if let Some(pos) = search_translation.find(&search_query) {
+                    return Some((pos, pos + query.len()));
                 }
             }
         }
     }
     
-    false
+    None
 }
 
 /// 在单个文件中搜索
@@ -1527,57 +1534,49 @@ fn search_in_file(
         .to_string_lossy()
         .to_string();
     
-    // 搜索文件名
-    let filename_match = if use_regex {
-        if let Some(regex) = regex_pattern {
-            regex.is_match(&file_name)
-        } else {
-            false
-        }
-    } else {
-        let direct_match = if case_sensitive {
-            file_name.contains(query)
-        } else {
-            file_name.to_lowercase().contains(&query.to_lowercase())
-        };
-        
-        // 如果直接匹配失败,尝试通过中文映射匹配
-        direct_match || check_chinese_match(file_path, base_path, query, case_sensitive, language_map)
-    };
-    
     // 获取文件的中文翻译(如果存在)
     let translation = get_file_translation(file_path, base_path, language_map);
     
-    if filename_match {
-        let (match_start, match_end) = if use_regex {
-            if let Some(regex) = regex_pattern {
+    // 搜索文件名
+    let (filename_match, match_start, match_end) = if use_regex {
+        if let Some(regex) = regex_pattern {
+            if regex.is_match(&file_name) {
                 if let Some(mat) = regex.find(&file_name) {
-                    (Some(mat.start()), Some(mat.end()))
+                    (true, Some(mat.start()), Some(mat.end()))
                 } else {
-                    (None, None)
+                    (true, None, None)
                 }
             } else {
-                (None, None)
+                (false, None, None)
             }
         } else {
-            let search_name = if case_sensitive {
-                file_name.clone()
-            } else {
-                file_name.to_lowercase()
-            };
-            let search_query = if case_sensitive {
-                query.to_string()
-            } else {
-                query.to_lowercase()
-            };
-            
-            if let Some(pos) = search_name.find(&search_query) {
-                (Some(pos), Some(pos + query.len()))
-            } else {
-                (None, None)
-            }
+            (false, None, None)
+        }
+    } else {
+        // 尝试直接匹配文件名
+        let search_name = if case_sensitive {
+            file_name.clone()
+        } else {
+            file_name.to_lowercase()
+        };
+        let search_query = if case_sensitive {
+            query.to_string()
+        } else {
+            query.to_lowercase()
         };
         
+        if let Some(pos) = search_name.find(&search_query) {
+            (true, Some(pos), Some(pos + query.len()))
+        } else {
+            if let Some((start, end)) = check_chinese_match(file_path, base_path, query, case_sensitive, language_map) {
+                (true, Some(start), Some(end))
+            } else {
+                (false, None, None)
+            }
+        }
+    };
+    
+    if filename_match {
         results.push(SearchResult {
             file_path: relative_path.clone(),
             match_type: "filename".to_string(),
@@ -1592,7 +1591,7 @@ fn search_in_file(
     // 搜索文件内容
     if let Some(ext) = file_path.extension() {
         let ext_str = ext.to_string_lossy().to_lowercase();
-        if matches!(ext_str.as_str(), "json" | "mcmeta" | "txt") {
+        if matches!(ext_str.as_str(), "json" | "mcmeta" | "txt" | "lang") {
             // 读取文件内容限制大小为 10MB
             let metadata = std::fs::metadata(file_path).ok();
             if let Some(meta) = metadata {
@@ -1833,4 +1832,187 @@ pub async fn fetch_url(url: String) -> Result<String, String> {
         .text()
         .await
         .map_err(|e| format!("Failed to read response: {}", e))
+}
+
+/// 检查文件是否存在
+#[tauri::command]
+pub fn check_file_exists(file_path: String) -> Result<bool, String> {
+    let path = Path::new(&file_path);
+    Ok(path.exists())
+}
+
+/// 复制音频文件到资源包
+#[tauri::command]
+pub async fn copy_sound_file(
+    sound_name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // 获取路径
+    let base_path = {
+        let pack_path = state.current_pack_path.lock().unwrap();
+        match pack_path.as_ref() {
+            Some(path) => path.clone(),
+            None => return Err("No pack loaded".to_string()),
+        }
+    };
+    
+    let source_ogg = base_path.join(".little100").join("sounds").join(format!("{}.ogg", sound_name));
+    let source_wav = base_path.join(".little100").join("sounds").join(format!("{}.wav", sound_name));
+    
+    let target_path = base_path.join("assets").join("minecraft").join("sounds").join(format!("{}.ogg", sound_name));
+    
+    // 确定源文件
+    let source_path = if source_ogg.exists() {
+        source_ogg
+    } else if source_wav.exists() {
+        source_wav
+    } else {
+        return Err(format!("音频文件不存在: {}", sound_name));
+    };
+    
+    // 创建目标目录
+    if let Some(parent) = target_path.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    
+    // 复制文件
+    tokio::fs::copy(&source_path, &target_path)
+        .await
+        .map_err(|e| format!("Failed to copy audio file: {}", e))?;
+    
+    Ok(())
+}
+
+/// 检查临时文件夹中的音频文件
+#[tauri::command]
+pub async fn check_temp_audio_files(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let pack_path = state.current_pack_path.lock().unwrap();
+    
+    let base_path = match pack_path.as_ref() {
+        Some(path) => path.clone(),
+        None => return Err("No pack loaded".to_string()),
+    };
+    
+    drop(pack_path);
+    
+    let sounds_dir = base_path.join(".little100").join("sounds");
+    
+    if !sounds_dir.exists() {
+        return Ok(Vec::new());
+    }
+    
+    let mut audio_files = Vec::new();
+    
+    use walkdir::WalkDir;
+    for entry in WalkDir::new(&sounds_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if entry.file_type().is_file() {
+            if let Some(ext) = entry.path().extension() {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                if matches!(ext_str.as_str(), "ogg" | "wav") {
+                    if let Ok(relative) = entry.path().strip_prefix(&sounds_dir) {
+                        audio_files.push(relative.to_string_lossy().replace('\\', "/"));
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(audio_files)
+}
+
+/// 读取文件内容并转换为 base64
+#[tauri::command]
+pub async fn read_file_as_base64(file_path: String) -> Result<String, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    
+    let file_content = tokio::fs::read(&file_path)
+        .await
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+    
+    Ok(general_purpose::STANDARD.encode(&file_content))
+}
+
+/// 在资源管理器中打开文件或文件夹
+#[tauri::command]
+pub async fn open_in_explorer(
+    file_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let full_path = {
+        let pack_path = state.current_pack_path.lock().unwrap();
+        
+        match pack_path.as_ref() {
+            Some(base_path) => {
+                let path = Path::new(&file_path);
+                if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    base_path.join(path)
+                }
+            }
+            None => PathBuf::from(&file_path),
+        }
+    };
+    
+    // 检查路径是否存在
+    if !full_path.exists() {
+        return Err(format!("路径不存在: {}", full_path.display()));
+    }
+    
+    // 根据操作系统打开资源管理器
+    #[cfg(target_os = "windows")]
+    {
+        if full_path.is_file() {
+            std::process::Command::new("explorer")
+                .args(&["/select,", &full_path.to_string_lossy()])
+                .spawn()
+                .map_err(|e| format!("无法打开资源管理器: {}", e))?;
+        } else {
+            std::process::Command::new("explorer")
+                .arg(&full_path)
+                .spawn()
+                .map_err(|e| format!("无法打开资源管理器: {}", e))?;
+        }
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        if full_path.is_file() {
+            std::process::Command::new("open")
+                .args(&["-R", &full_path.to_string_lossy()])
+                .spawn()
+                .map_err(|e| format!("无法打开 Finder: {}", e))?;
+        } else {
+            std::process::Command::new("open")
+                .arg(&full_path)
+                .spawn()
+                .map_err(|e| format!("无法打开 Finder: {}", e))?;
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        if full_path.is_file() {
+            // 尝试打开父目录
+            if let Some(parent) = full_path.parent() {
+                std::process::Command::new("xdg-open")
+                    .arg(parent)
+                    .spawn()
+                    .map_err(|e| format!("无法打开文件管理器: {}", e))?;
+            }
+        } else {
+            std::process::Command::new("xdg-open")
+                .arg(&full_path)
+                .spawn()
+                .map_err(|e| format!("无法打开文件管理器: {}", e))?;
+        }
+    }
+    
+    Ok(())
 }
