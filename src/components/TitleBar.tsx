@@ -9,6 +9,7 @@ import creditsContent from '../../credits.md?raw';
 import { manualCheckUpdate } from '../utils/updater';
 import Little100Avatar from '../assets/avatar/Little_100.png';
 import LivedInCornerAvatar from '../assets/avatar/LivedInCorner.png';
+import Stone926Avatar from '../assets/avatar/stone926.png';
 
 interface TitleBarProps {
   packSize?: number;      // 材质包大小
@@ -65,6 +66,7 @@ const TitleBar = ({ packSize = 0, historySize = 0, showStats = false, debugMode 
   const avatarMap: Record<string, string> = {
     'src/assets/avatar/Little_100.png': Little100Avatar,
     'src/assets/avatar/LivedInCorner.png': LivedInCornerAvatar,
+    'src/assets/avatar/stone926.png': Stone926Avatar,
   };
 
   // 解析credits.md内容

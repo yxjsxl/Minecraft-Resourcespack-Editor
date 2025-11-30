@@ -36,7 +36,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../version_map/version_map.json"
+      "../public/version_map/version_map.json",
+      "../credits.md"
     ],
     "windows": {
       "wix": {

@@ -7,3 +7,8 @@
  - [LivedInCorner](https://space.bilibili.com/3493094785812897)
  - QQ: 162****662 
  - avatar: src/assets/avatar/LivedInCorner.png
+
+# 材质包智能补全参考文件
+ - [遠風化蝶_ | Github叫stone926](https://space.bilibili.com/350642293)
+ - QQ: 未知
+ - avatar: src/assets/avatar/stone926.png
