@@ -535,7 +535,7 @@ export default function HighPerformanceCanvasHighlighter({
     endLine: number,
     canvasWidth: number,
     dpr: number
-  ): OffscreenCanvas | HTMLCanvasElement | null => {
+  ): OffscreenCanvas | HTMLCanvasElement | undefined => {
     const chunkHeight = (endLine - startLine) * lineHeightPx;
     
     let offscreen: OffscreenCanvas | HTMLCanvasElement;
@@ -551,7 +551,7 @@ export default function HighPerformanceCanvasHighlighter({
     }
 
     const ctx = offscreen.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-    if (!ctx) return null;
+    if (!ctx) return undefined;
 
     ctx.scale(dpr, dpr);
 
