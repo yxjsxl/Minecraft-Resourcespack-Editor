@@ -100,5 +100,3 @@ exports/
 # Linux specific
 *~
 .directory
-
-CHANGELOG.md
