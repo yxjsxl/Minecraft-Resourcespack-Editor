@@ -8,7 +8,7 @@ const REPO_NAME = 'minecraft-resourcespack-editor';
 const CHANGELOG_RAW_URL = 'https://gitee.com/little_100/minecraft-resourcespack-editor/raw/main/CHANGELOG.md';
 
 // 当前版本
-const CURRENT_VERSION = '0.1.5';
+const CURRENT_VERSION = '0.1.6';
 
 interface GiteeRelease {
   id: number;
