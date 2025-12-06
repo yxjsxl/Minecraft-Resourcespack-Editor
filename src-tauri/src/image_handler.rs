@@ -3,6 +3,19 @@ use std::path::{Path, PathBuf};
 use base64::{Engine as _, engine::general_purpose};
 use std::io::BufReader;
 use std::fs::File;
+use std::sync::Arc;
+use parking_lot::RwLock;
+use lru::LruCache;
+use std::num::NonZeroUsize;
+use once_cell::sync::Lazy;
+
+static THUMBNAIL_CACHE: Lazy<Arc<RwLock<LruCache<String, String>>>> = Lazy::new(|| {
+    Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(1000).unwrap())))
+});
+
+static IMAGE_INFO_CACHE: Lazy<Arc<RwLock<LruCache<String, ImageInfo>>>> = Lazy::new(|| {
+    Arc::new(RwLock::new(LruCache::new(NonZeroUsize::new(2000).unwrap())))
+});
 
 /// 读取图片并转换为base64
 #[allow(dead_code)]
@@ -22,6 +35,16 @@ pub fn image_to_base64(path: &Path) -> Result<String, String> {
 /// 获取图片尺寸
 #[allow(dead_code)]
 pub fn get_image_dimensions(path: &Path) -> Result<(u32, u32), String> {
+    let path_str = path.to_string_lossy().to_string();
+    
+    // 检查缓存
+    {
+        let cache = IMAGE_INFO_CACHE.read();
+        if let Some(info) = cache.peek(&path_str) {
+            return Ok((info.width, info.height));
+        }
+    }
+    
     let img = image::open(path)
         .map_err(|e| format!("Failed to open image: {}", e))?;
     
@@ -42,7 +65,7 @@ pub fn resize_image(
     let resized = img.resize_exact(
         width,
         height,
-        image::imageops::FilterType::Nearest, // 使用最近邻插值保持像素风格
+        image::imageops::FilterType::Nearest,
     );
     
     resized.save(output_path)
@@ -60,11 +83,22 @@ pub fn validate_texture_size(width: u32, height: u32) -> bool {
     (is_multiple_of_16(width) && is_multiple_of_16(height))
 }
 
-/// 创建缩略图
+/// 创建缩略图（优化版本，带缓存）
 pub fn create_thumbnail(
     path: &Path,
     max_size: u32,
 ) -> Result<String, String> {
+    let path_str = path.to_string_lossy().to_string();
+    let cache_key = format!("{}_{}", path_str, max_size);
+    
+    // 检查缓存
+    {
+        let cache = THUMBNAIL_CACHE.read();
+        if let Some(cached) = cache.peek(&cache_key) {
+            return Ok(cached.clone());
+        }
+    }
+    
     let file = File::open(path)
         .map_err(|e| format!("Failed to open image: {}", e))?;
     let reader = BufReader::with_capacity(8192, file);
@@ -79,7 +113,12 @@ pub fn create_thumbnail(
         let mut buffer = Vec::with_capacity((width * height * 4) as usize);
         img.write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
             .map_err(|e| format!("Failed to encode image: {}", e))?;
-        return Ok(general_purpose::STANDARD.encode(&buffer));
+        let result = general_purpose::STANDARD.encode(&buffer);
+        
+        let mut cache = THUMBNAIL_CACHE.write();
+        cache.put(cache_key, result.clone());
+        
+        return Ok(result);
     }
     
     let scale = (max_size as f32 / width.max(height) as f32).min(1.0);
@@ -99,7 +138,12 @@ pub fn create_thumbnail(
     thumbnail.write_to(&mut std::io::Cursor::new(&mut buffer), ImageFormat::Png)
         .map_err(|e| format!("Failed to encode thumbnail: {}", e))?;
     
-    Ok(general_purpose::STANDARD.encode(&buffer))
+    let result = general_purpose::STANDARD.encode(&buffer);
+    
+    let mut cache = THUMBNAIL_CACHE.write();
+    cache.put(cache_key, result.clone());
+    
+    Ok(result)
 }
 
 /// 图片信息
@@ -114,6 +158,16 @@ pub struct ImageInfo {
 
 /// 获取图片完整信息
 pub fn get_image_info(path: &Path) -> Result<ImageInfo, String> {
+    let path_str = path.to_string_lossy().to_string();
+    
+    // 检查缓存
+    {
+        let cache = IMAGE_INFO_CACHE.read();
+        if let Some(info) = cache.peek(&path_str) {
+            return Ok(info.clone());
+        }
+    }
+    
     let img = image::open(path)
         .map_err(|e| format!("Failed to open image: {}", e))?;
     
@@ -130,13 +184,19 @@ pub fn get_image_info(path: &Path) -> Result<ImageInfo, String> {
     
     let is_valid_texture = validate_texture_size(width, height);
     
-    Ok(ImageInfo {
+    let info = ImageInfo {
         width,
         height,
         format,
         size_bytes,
         is_valid_texture,
-    })
+    };
+    
+    // 缓存结果
+    let mut cache = IMAGE_INFO_CACHE.write();
+    cache.put(path_str, info.clone());
+    
+    Ok(info)
 }
 
 /// 创建透明PNG图片
@@ -172,6 +232,7 @@ pub fn create_transparent_png(
     Ok(())
 }
 
+/// 异步创建缩略图
 pub async fn create_thumbnail_async(
     path: PathBuf,
     max_size: u32,
@@ -187,6 +248,7 @@ pub async fn create_thumbnail_async(
         .map_err(|e| format!("Channel error: {}", e))?
 }
 
+/// 批量创建缩略图
 #[allow(dead_code)]
 pub async fn create_thumbnails_batch(
     paths: Vec<PathBuf>,
@@ -206,4 +268,19 @@ pub async fn create_thumbnails_batch(
         .collect();
     
     results
+}
+
+/// 清除缓存
+#[allow(dead_code)]
+pub fn clear_caches() {
+    THUMBNAIL_CACHE.write().clear();
+    IMAGE_INFO_CACHE.write().clear();
+}
+
+/// 获取缓存统计信息
+#[allow(dead_code)]
+pub fn get_cache_stats() -> (usize, usize) {
+    let thumb_cache = THUMBNAIL_CACHE.read();
+    let info_cache = IMAGE_INFO_CACHE.read();
+    (thumb_cache.len(), info_cache.len())
 }

@@ -83,6 +83,14 @@
   justify-content: center;
   align-items: center;
   padding: 0 20px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .titlebar-center {
+    display: none;
+  }
 }
 
 .size-stats {
@@ -94,12 +102,17 @@
   background: var(--bg-secondary);
   padding: 4px 12px;
   border-radius: 4px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .stat-label {

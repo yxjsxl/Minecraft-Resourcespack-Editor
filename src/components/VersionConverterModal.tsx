@@ -125,10 +125,45 @@ const VersionConverterModal = ({ onClose }: VersionConverterModalProps) => {
     loadVersions();
   }, []);
 
+  const normalizePath = (path: string): string => {
+    return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  };
+
+  const isSubdirectory = (parentPath: string, childPath: string): boolean => {
+    const normalizedParent = normalizePath(parentPath);
+    const normalizedChild = normalizePath(childPath);
+    
+    if (normalizedParent === normalizedChild) {
+      return false;
+    }
+    
+    return normalizedChild.startsWith(normalizedParent + '/');
+  };
+
+  // 检查两个路径是否相同
+  const isSamePath = (path1: string, path2: string): boolean => {
+    return normalizePath(path1) === normalizePath(path2);
+  };
+
+  const [sameDirectoryWarning, setSameDirectoryWarning] = useState<string | null>(null);
+
   const handleSelectOutputPath = async () => {
     try {
       const folder = await selectOutputFolder();
       if (folder && folder.trim() !== '') {
+        // 检查是否选择了输入路径的子目录
+        if (selectedPath && isSubdirectory(selectedPath, folder)) {
+          setError('禁止操作：不允许将输出目录设置为输入目录的子目录，这会导致严重的套娃问题！');
+          return;
+        }
+        
+        // 检查是否选择了相同的目录
+        if (selectedPath && isSamePath(selectedPath, folder)) {
+          setError('禁止操作：不允许将输出目录设置为与输入目录相同的位置，这会导致套娃问题！\n请选择其他目录作为输出位置。');
+          return;
+        }
+        
+        setSameDirectoryWarning(null);
         setOutputPath(folder);
         setError(null);
       }
@@ -153,8 +188,34 @@ const VersionConverterModal = ({ onClose }: VersionConverterModalProps) => {
       return;
     }
 
-    if (!outputFileName.trim()) {
+    const trimmedFileName = outputFileName.trim();
+    if (!trimmedFileName) {
       setError('请输入输出文件名');
+      return;
+    }
+
+    const inputFolderName = selectedPath.split(/[/\\]/).pop() || '';
+    
+    const finalOutputPath = `${outputPath}/${trimmedFileName}`;
+    
+    if (isSamePath(selectedPath, outputPath) || isSubdirectory(selectedPath, outputPath)) {
+      setError('禁止操作：输出目录不能是输入目录或其子目录！\n请选择其他目录作为输出位置。');
+      return;
+    }
+    
+    if (isSamePath(selectedPath, finalOutputPath)) {
+      setError('输出路径不能与输入路径完全相同！\n请使用不同的输出文件名或选择不同的输出目录。');
+      return;
+    }
+    
+    const inputParentPath = selectedPath.substring(0, Math.max(selectedPath.lastIndexOf('/'), selectedPath.lastIndexOf('\\')));
+    if (isSamePath(outputPath, inputParentPath) && trimmedFileName.toLowerCase() === inputFolderName.toLowerCase()) {
+      setError('输出文件名不能与输入目录名相同，这会导致原始资源包被覆盖！\n请使用不同的文件名。');
+      return;
+    }
+
+    if (isSubdirectory(finalOutputPath, selectedPath)) {
+      setError('禁止操作：输入目录不能在输出路径内部，这会导致数据被覆盖！');
       return;
     }
 
@@ -162,9 +223,6 @@ const VersionConverterModal = ({ onClose }: VersionConverterModalProps) => {
       setConverting(true);
       setError(null);
       setConversionSuccess(false);
-
-      // 构建完整输出路径
-      const finalOutputPath = `${outputPath}/${outputFileName}`;
 
       // 调用转换命令
       const result = await invoke<string>('convert_pack_version', {
@@ -707,6 +765,27 @@ const VersionConverterModal = ({ onClose }: VersionConverterModalProps) => {
                       浏览
                     </button>
                   </div>
+                  {sameDirectoryWarning && (
+                    <div className="warning-message" style={{
+                      marginTop: '0.5rem',
+                      padding: '0.75rem',
+                      backgroundColor: 'rgba(255, 193, 7, 0.15)',
+                      border: '1px solid rgba(255, 193, 7, 0.5)',
+                      borderRadius: '6px',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                      whiteSpace: 'pre-line'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffc107" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                          <line x1="12" y1="9" x2="12" y2="13"></line>
+                          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <span>{sameDirectoryWarning}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="setting-item">
@@ -755,17 +834,6 @@ const VersionConverterModal = ({ onClose }: VersionConverterModalProps) => {
             </div>
           )}
 
-          {error && (
-            <div className="error-message">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
-
           {loading && (
             <div className="loading-message">
               <div className="spinner"></div>
@@ -773,6 +841,17 @@ const VersionConverterModal = ({ onClose }: VersionConverterModalProps) => {
             </div>
           )}
         </div>
+
+        {error && (
+          <div className="error-message">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>{error}</span>
+          </div>
+        )}
       </div>
     </>
   );

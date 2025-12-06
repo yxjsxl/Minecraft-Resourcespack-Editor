@@ -113,19 +113,69 @@ fn convert_zip_pack(
     Ok(format!("成功转换到输出路径: {:?}", output_path))
 }
 
+fn normalize_path_string(path: &Path) -> String {
+    path.to_string_lossy().to_lowercase().replace('\\', "/").trim_end_matches('/').to_string()
+}
+
+/// 检查两个路径是否相同
+fn is_same_path(path1: &Path, path2: &Path) -> bool {
+    let canonical1 = path1.canonicalize().ok();
+    let canonical2 = path2.canonicalize().ok();
+    
+    match (canonical1, canonical2) {
+        (Some(p1), Some(p2)) => p1 == p2,
+        _ => {
+            normalize_path_string(path1) == normalize_path_string(path2)
+        }
+    }
+}
+
+fn is_subdirectory(parent: &Path, child: &Path) -> bool {
+    let canonical_parent = parent.canonicalize().ok();
+    let canonical_child = child.canonicalize().ok();
+    
+    match (canonical_parent, canonical_child) {
+        (Some(p), Some(c)) => {
+            if p == c {
+                return false;
+            }
+            c.starts_with(&p)
+        },
+        _ => {
+            let parent_str = normalize_path_string(parent);
+            let child_str = normalize_path_string(child);
+            
+            if parent_str == child_str {
+                return false;
+            }
+            
+            child_str.starts_with(&format!("{}/", parent_str))
+        }
+    }
+}
+
 /// 转换文件夹格式的资源包
 fn convert_folder_pack(
     input_path: &Path,
     output_path: &Path,
     target_pack_format: u32,
 ) -> Result<String, String> {
+    if is_same_path(input_path, output_path) {
+        return Err("禁止操作：输出路径不能与输入路径完全相同！".to_string());
+    }
+    
+    if is_subdirectory(output_path, input_path) {
+        return Err("禁止操作：输入目录不能在输出路径内部，这会导致数据被覆盖！".to_string());
+    }
+    
     if output_path.exists() {
         fs::remove_dir_all(output_path)
             .map_err(|e| format!("无法删除已存在的输出目录: {}", e))?;
     }
     
-    // 复制整个文件夹
-    copy_dir_all(input_path, output_path)?;
+    let output_canonical = output_path.canonicalize().ok();
+    
+    copy_dir_all_excluding(input_path, output_path, output_canonical.as_deref())?;
     
     // 修改pack.mcmeta
     let mcmeta_path = output_path.join("pack.mcmeta");
@@ -145,7 +195,7 @@ fn convert_folder_pack(
 }
 
 /// 递归复制目录
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
+fn copy_dir_all_excluding(src: &Path, dst: &Path, exclude: Option<&Path>) -> Result<(), String> {
     fs::create_dir_all(dst)
         .map_err(|e| format!("无法创建目录: {}", e))?;
     
@@ -156,11 +206,19 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
         let file_name = entry.file_name();
         let dest_path = dst.join(&file_name);
         
+        if let Some(exclude_path) = exclude {
+            if let Ok(canonical_path) = path.canonicalize() {
+                if canonical_path == exclude_path || canonical_path.starts_with(exclude_path) {
+                    continue;
+                }
+            }
+        }
+        
         if path.is_dir() {
-            copy_dir_all(&path, &dest_path)?;
+            copy_dir_all_excluding(&path, &dest_path, exclude)?;
         } else {
             fs::copy(&path, &dest_path)
-                .map_err(|e| format!("无法复制文件: {}", e))?;
+                .map_err(|e| format!("无法复制文件 {:?}: {}", path, e))?;
         }
     }
     
@@ -248,23 +306,23 @@ fn load_version_map_from_file() -> Result<Vec<(u32, String)>, String> {
     
     // 尝试多个可能的路径
     let possible_paths = vec![
-        // 打包后的路径
-        exe_dir.join("resources").join("version_map.json"),
-        current_dir.join("version_map").join("version_map.json"),
-        current_dir.join("..").join("version_map").join("version_map.json"),
-        PathBuf::from("version_map/version_map.json"),
-        PathBuf::from("../version_map/version_map.json"),
-        exe_dir.join("..").join("..").join("version_map").join("version_map.json"),
-        exe_dir.join("version_map").join("version_map.json"),
         exe_dir.join("version_map.json"),
-        PathBuf::from("version_map.json"),
+        exe_dir.join("resources").join("version_map.json"),
+        exe_dir.join("_up_").join("version_map.json"),
+        exe_dir.join("..").join("Resources").join("version_map.json"),
+        current_dir.join("public").join("version_map").join("version_map.json"),
+        current_dir.join("..").join("public").join("version_map").join("version_map.json"),
+        PathBuf::from("../public/version_map/version_map.json"),
+        PathBuf::from("public/version_map/version_map.json"),
+        current_dir.join("version_map").join("version_map.json"),
+        exe_dir.join("version_map").join("version_map.json"),
     ];
     
     for path in &possible_paths {
-        let canonical_path = path.canonicalize().ok();
         if path.exists() {
             match load_version_map(path) {
                 Ok(versions) => {
+                    let canonical_path = path.canonicalize().ok();
                     eprintln!("✓ 成功从 {:?} 加载版本映射", canonical_path.unwrap_or_else(|| path.clone()));
                     return Ok(versions);
                 },
@@ -273,11 +331,7 @@ fn load_version_map_from_file() -> Result<Vec<(u32, String)>, String> {
         }
     }
     
-    eprintln!("未找到 version_map.json 文件，使用内置版本数据");
-    eprintln!("  当前目录: {:?}", current_dir);
-    eprintln!("  可执行文件目录: {:?}", exe_dir);
-    
-    Err("未找到 version_map.json 文件，已使用备用数据".to_string())
+    Err("未找到 version_map.json 文件".to_string())
 }
 
 /// 从指定路径加载版本映射

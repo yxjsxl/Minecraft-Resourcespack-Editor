@@ -35,9 +35,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "../public/version_map/version_map.json"
-    ],
+    "resources": {
+      "../public/version_map/version_map.json": "version_map.json"
+    },
     "windows": {
       "wix": {
         "language": "zh-CN"

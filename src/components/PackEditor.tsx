@@ -1061,6 +1061,7 @@ export default function PackEditor({ packInfo, onClose, debugMode = false }: Pac
               setOpenTabs(newTabs);
             }
           }}
+          onImageLoad={(info) => setImageInfo(info)}
         />
       );
     }
@@ -1400,37 +1401,6 @@ const FileTreeItem = memo(({
   const isExpanded = expandedFolders.has(currentPath) || isRoot;
   const isRenaming = renamingPath === currentPath;
 
-  const renderTreeLines = () => {
-    const lines: React.ReactNode[] = [];
-
-    for (let i = 0; i < level; i++) {
-      if (parentLines[i]) {
-        lines.push(
-          <span
-            key={`vline-${i}`}
-            className="tree-vline"
-            style={{
-              left: `${i * 20 + 10}px`
-            }}
-          />
-        );
-      }
-    }
-
-    if (level > 0) {
-      lines.push(
-        <span
-          key="connector"
-          className={`tree-connector ${isLast ? 'last' : ''}`}
-          style={{
-            left: `${(level - 1) * 20 + 10}px`
-          }}
-        />
-      );
-    }
-
-    return lines;
-  };
 
   if (node.is_dir) {
     const children = node.children || [];
@@ -1444,7 +1414,7 @@ const FileTreeItem = memo(({
       <div className="tree-node">
         <div
           className={`tree-item folder ${isExpanded ? 'expanded' : ''} ${contextMenuPath === currentPath ? 'context-selected' : ''}`}
-          style={{ paddingLeft: `${level * 20 + 24}px` }}
+          style={{ paddingLeft: `${level * 10 + 10}px` }}
           onClick={(e) => {
             if (!isRenaming) toggleFolder(currentPath, node);
           }}
@@ -1456,8 +1426,12 @@ const FileTreeItem = memo(({
             }
           }}
         >
-          {renderTreeLines()}
-          <span className="folder-icon">
+          <span className="tree-arrow" style={{ marginRight: '4px', display: 'flex', alignItems: 'center' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.1s' }}>
+              <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </span>
+          <span className="folder-icon" style={{ marginRight: '6px' }}>
             {isExpanded ? <FolderOpenIcon className="tree-icon" /> : <FolderIcon className="tree-icon" />}
           </span>
           {isRenaming ? (
@@ -1508,7 +1482,7 @@ const FileTreeItem = memo(({
     return (
       <div
         className={`tree-item file ${selectedFile === currentPath ? "selected" : ""} ${contextMenuPath === currentPath ? 'context-selected' : ''}`}
-        style={{ paddingLeft: `${level * 20 + 24}px` }}
+        style={{ paddingLeft: `${level * 10 + 28}px` }}
         onClick={(e) => {
           if (!isRenaming) openFileInTab(currentPath);
         }}
@@ -1520,7 +1494,6 @@ const FileTreeItem = memo(({
           }
         }}
       >
-        {renderTreeLines()}
         <span className="file-icon"><FileIcon className="tree-icon" /></span>
         {isRenaming ? (
           <input
@@ -1596,46 +1569,31 @@ return (
         style={{ width: isSidebarOpen ? `${sidebarWidth}px` : '0px' }}
       >
         <div className="sidebar-header">
-          <div className="sidebar-header-left">
-            <button className="btn-back" onClick={onClose} title="返回主页">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h3>文件</h3>
+          <div className="sidebar-header-left" style={{ paddingLeft: '8px' }}>
+            <h3>资源管理器</h3>
           </div>
-          <div className="sidebar-header-right">
-            <button
-              className={`btn-icon ${language === 'zh' ? 'active' : ''}`}
-              onClick={() => {
-                const newLang = language === 'en' ? 'zh' : 'en';
-                setLanguage(newLang);
-                console.log(`[语言切换] 切换到${newLang === 'zh' ? '中文' : '英文'}模式`);
-              }}
-              title={language === 'en' ? '切换到中文' : '切换到英文'}
-              style={{
-                fontWeight: 600,
-                fontSize: '0.85rem',
-                minWidth: '32px'
-              }}
-            >
-              {language === 'en' ? '英' : '中'}
-            </button>
-            <button
+          <div className="sidebar-header-right" style={{ paddingRight: '8px' }}>
+             <button className="btn-icon" onClick={onClose} title="返回主页" style={{ width: '24px', height: '24px' }}>
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+               </svg>
+             </button>
+             <button
               className="btn-icon"
               onClick={() => setShowSearchModal(true)}
               title="搜索 (Ctrl+F)"
+              style={{ width: '24px', height: '24px' }}
             >
-              <SearchIcon className="tree-icon" />
+              <SearchIcon className="tree-icon" style={{ width: '14px', height: '14px' }} />
             </button>
-            <button className="btn-icon" onClick={refreshFileTree} title="刷新">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button className="btn-icon" onClick={refreshFileTree} title="刷新" style={{ width: '24px', height: '24px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
               </svg>
             </button>
-            <button className="btn-icon" onClick={() => setIsSidebarOpen(false)} title="收起侧边栏">
+            <button className="btn-icon" onClick={() => setIsSidebarOpen(false)} title="收起" style={{ width: '24px', height: '24px' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 12L18 18"/>
+                 <path d="M6 6L18 12L6 18"/>
               </svg>
             </button>
           </div>
@@ -1669,11 +1627,45 @@ return (
               </svg>
             </button>
           )}
-          <div className="editor-tabs" ref={tabsContainerRef}>
+          <div
+            className="editor-tabs"
+            ref={tabsContainerRef}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+            }}
+          >
             {openTabs.map((tab, index) => (
               <div
                 key={tab.path}
-                className={`editor-tab ${index === activeTabIndex ? 'active' : ''}`}
+                className={`editor-tab ${index === activeTabIndex ? 'active' : ''} ${tab.isDirty ? 'dirty' : ''}`}
+                draggable={true}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/x-tab-index", index.toString());
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const dragIndexStr = e.dataTransfer.getData("application/x-tab-index");
+                  if (dragIndexStr) {
+                    const dragIndex = parseInt(dragIndexStr);
+                    if (dragIndex !== index) {
+                      const newTabs = [...openTabs];
+                      const [removed] = newTabs.splice(dragIndex, 1);
+                      newTabs.splice(index, 0, removed);
+                      setOpenTabs(newTabs);
+                      
+                      // Adjust active tab index
+                      if (activeTabIndex === dragIndex) {
+                        setActiveTabIndex(index);
+                      } else if (activeTabIndex > dragIndex && activeTabIndex <= index) {
+                        setActiveTabIndex(activeTabIndex - 1);
+                      } else if (activeTabIndex < dragIndex && activeTabIndex >= index) {
+                        setActiveTabIndex(activeTabIndex + 1);
+                      }
+                    }
+                  }
+                }}
                 onClick={() => setActiveTabIndex(index)}
                 onMouseDown={(e) => {
                   // 鼠标中键(滚轮按钮)关闭标签
@@ -1683,13 +1675,16 @@ return (
                   }
                 }}
               >
-                <span>{tab.isDirty ? '● ' : ''}{tab.path.split('/').pop() || '未命名'}</span>
-                <button className="tab-close" onClick={(e) => closeTab(index, e)}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
+                <span>{tab.path.split('/').pop() || '未命名'}</span>
+                <div className="tab-close-container">
+                  <div className="tab-dirty" />
+                  <button className="tab-close" onClick={(e) => closeTab(index, e)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
               </div>
             ))}
           </div>

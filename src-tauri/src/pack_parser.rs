@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use rayon::prelude::*;
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 /// 版本枚举
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -157,10 +160,9 @@ pub fn scan_pack_directory(root_path: &Path) -> Result<PackInfo, String> {
             Ok(meta) => meta,
             Err(e) => {
                 eprintln!("Warning: Failed to parse pack.mcmeta: {}. Using default values.", e);
-                // 使用默认值,允许用户在编辑器中修复
                 PackMeta {
                     pack: PackMetaInfo {
-                        pack_format: 34, // 默认使用最新格式
+                        pack_format: 34,
                         description: format!("️pack.mcmeta格式错误: {}", e),
                     }
                 }
@@ -168,7 +170,6 @@ pub fn scan_pack_directory(root_path: &Path) -> Result<PackInfo, String> {
         }
     } else {
         eprintln!("Warning: pack.mcmeta not found. Using default values.");
-        // 如果文件不存在,也使用默认值
         PackMeta {
             pack: PackMetaInfo {
                 pack_format: 34,
@@ -178,27 +179,28 @@ pub fn scan_pack_directory(root_path: &Path) -> Result<PackInfo, String> {
     };
 
     let version = MinecraftVersion::from_pack_format(pack_meta.pack.pack_format);
-    let mut resources: HashMap<ResourceType, Vec<ResourceFile>> = HashMap::new();
-    let mut namespaces = Vec::new();
+    
+    let resources: Arc<Mutex<HashMap<ResourceType, Vec<ResourceFile>>>> = 
+        Arc::new(Mutex::new(HashMap::new()));
+    let namespaces: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
-    // 扫描assets目录
     let assets_path = root_path.join("assets");
     if assets_path.exists() {
-        for entry in WalkDir::new(&assets_path)
+        let entries: Vec<_> = WalkDir::new(&assets_path)
             .into_iter()
             .filter_map(|e| e.ok())
-        {
+            .filter(|e| e.path().is_file())
+            .collect();
+
+        entries.par_iter().for_each(|entry| {
             let path = entry.path();
             
-            // 只处理文件
-            if !path.is_file() {
-                continue;
-            }
-
-            // 提取命名空间
             if let Some(namespace) = extract_namespace(path) {
-                if !namespaces.contains(&namespace) {
-                    namespaces.push(namespace.clone());
+                {
+                    let mut ns = namespaces.lock();
+                    if !ns.contains(&namespace) {
+                        ns.push(namespace.clone());
+                    }
                 }
 
                 // 解析资源类型
@@ -230,13 +232,24 @@ pub fn scan_pack_directory(root_path: &Path) -> Result<PackInfo, String> {
                     size,
                 };
 
-                resources
-                    .entry(resource_type)
+                // 更新资源列表
+                let mut res = resources.lock();
+                res.entry(resource_type)
                     .or_insert_with(Vec::new)
                     .push(resource);
             }
-        }
+        });
     }
+
+    // 提取最终结果
+    let final_resources = match Arc::try_unwrap(resources) {
+        Ok(mutex) => mutex.into_inner(),
+        Err(arc) => arc.lock().clone(),
+    };
+    let final_namespaces = match Arc::try_unwrap(namespaces) {
+        Ok(mutex) => mutex.into_inner(),
+        Err(arc) => arc.lock().clone(),
+    };
 
     Ok(PackInfo {
         name: root_path
@@ -247,7 +260,7 @@ pub fn scan_pack_directory(root_path: &Path) -> Result<PackInfo, String> {
         version,
         pack_format: pack_meta.pack.pack_format,
         description: pack_meta.pack.description,
-        resources,
-        namespaces,
+        resources: final_resources,
+        namespaces: final_namespaces,
     })
 }

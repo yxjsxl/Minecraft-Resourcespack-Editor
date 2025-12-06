@@ -87,3 +87,20 @@
 .token-text {
   color: transparent;
 }
+
+.dom-syntax-highlighter {
+  background: transparent;
+}
+
+.dom-syntax-highlighter .syntax-line {
+  display: block;
+  min-height: 1.5em;
+}
+
+.dom-syntax-highlighter.dark .token-text {
+  color: #d4d4d4;
+}
+
+.dom-syntax-highlighter.light .token-text {
+  color: #333333;
+}

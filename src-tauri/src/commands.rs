@@ -634,81 +634,73 @@ fn read_directory_tree_lazy(
     let entries =
         std::fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
-    let mut entries: Vec<_> = entries.collect();
+    let mut entries: Vec<_> = entries
+        .filter_map(|e| e.ok())
+        .collect();
 
-    entries.sort_unstable_by(|a, b| {
-        let name_a = a
-            .as_ref()
-            .ok()
-            .and_then(|e| e.file_name().into_string().ok())
-            .unwrap_or_default();
-        let name_b = b
-            .as_ref()
-            .ok()
-            .and_then(|e| e.file_name().into_string().ok())
-            .unwrap_or_default();
+    entries.par_sort_unstable_by(|a, b| {
+        let name_a = a.file_name().to_string_lossy().to_string();
+        let name_b = b.file_name().to_string_lossy().to_string();
         name_a.cmp(&name_b)
     });
 
-    let mut nodes = Vec::with_capacity(entries.len());
+    let nodes: Vec<FileTreeNode> = entries
+        .par_iter()
+        .filter_map(|entry| {
+            let entry_path = entry.path();
+            let metadata = entry.metadata().ok()?;
 
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let entry_path = entry.path();
-        let metadata = entry
-            .metadata()
-            .map_err(|e| format!("Failed to read metadata: {}", e))?;
+            let relative_path = entry_path
+                .strip_prefix(base_path)
+                .unwrap_or(&entry_path)
+                .to_string_lossy()
+                .replace('\\', "/");
 
-        let relative_path = entry_path
-            .strip_prefix(base_path)
-            .unwrap_or(&entry_path)
-            .to_string_lossy()
-            .replace('\\', "/");
+            let name = entry.file_name().to_string_lossy().to_string();
+            
+            // 跳过 .little100 目录
+            if name == ".little100" {
+                return None;
+            }
 
-        let name = entry.file_name().to_string_lossy().to_string();
-        
-        // 跳忽略 .little100 目录
-        if name == ".little100" {
-            continue;
-        }
+            let node = if metadata.is_dir() {
+                let file_count = std::fs::read_dir(&entry_path)
+                    .map(|entries| entries.count())
+                    .unwrap_or(0);
 
-        let node = if metadata.is_dir() {
-            let file_count = std::fs::read_dir(&entry_path)
-                .map(|entries| entries.count())
-                .unwrap_or(0);
+                let children = if depth < max_depth {
+                    read_directory_tree_lazy(
+                        &entry_path,
+                        base_path,
+                        depth + 1,
+                        max_depth,
+                    ).ok()
+                } else {
+                    None
+                };
 
-            let children = if depth < max_depth {
-                Some(read_directory_tree_lazy(
-                    &entry_path,
-                    base_path,
-                    depth + 1,
-                    max_depth,
-                )?)
+                FileTreeNode {
+                    name,
+                    path: relative_path,
+                    is_dir: true,
+                    children,
+                    file_count: Some(file_count),
+                    loaded: depth < max_depth,
+                }
             } else {
-                None
+                FileTreeNode {
+                    name,
+                    path: relative_path,
+                    is_dir: false,
+                    children: None,
+                    file_count: None,
+                    loaded: true,
+                }
             };
 
-            FileTreeNode {
-                name,
-                path: relative_path,
-                is_dir: true,
-                children,
-                file_count: Some(file_count),
-                loaded: depth < max_depth,
-            }
-        } else {
-            FileTreeNode {
-                name,
-                path: relative_path,
-                is_dir: false,
-                children: None,
-                file_count: None,
-                loaded: true,
-            }
-        };
-
-        nodes.push(node);
-    }
+            Some(node)
+        })
+        .collect();
 
     Ok(nodes)
 }
@@ -1340,13 +1332,12 @@ pub async fn search_files(
     })
 }
 
-/// 收集可搜索的文件
+/// 收集可搜索的文件（并行优化版本）
 fn collect_searchable_files(base_path: &Path) -> Result<Vec<PathBuf>, String> {
     use walkdir::WalkDir;
     
-    let mut files = Vec::new();
-    
-    for entry in WalkDir::new(base_path)
+    // 并行收集文件
+    let files: Vec<PathBuf> = WalkDir::new(base_path)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| {
@@ -1357,19 +1348,18 @@ fn collect_searchable_files(base_path: &Path) -> Result<Vec<PathBuf>, String> {
                 true
             }
         })
-    {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        
-        if entry.file_type().is_file() {
-            if let Some(ext) = entry.path().extension() {
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| {
+            if let Some(ext) = e.path().extension() {
                 let ext_str = ext.to_string_lossy().to_lowercase();
-                // 支持的文件类型
-                if matches!(ext_str.as_str(), "json" | "mcmeta" | "txt" | "png" | "lang") {
-                    files.push(entry.path().to_path_buf());
-                }
+                matches!(ext_str.as_str(), "json" | "mcmeta" | "txt" | "png" | "lang")
+            } else {
+                false
             }
-        }
-    }
+        })
+        .map(|e| e.path().to_path_buf())
+        .collect();
     
     Ok(files)
 }

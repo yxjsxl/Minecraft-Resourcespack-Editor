@@ -5,6 +5,10 @@
   background: var(--bg-primary);
 }
 
+[data-theme="dark"] .image-viewer {
+  background: #1e1e1e;
+}
+
 body.acrylic-mode .image-viewer {
   background: transparent;
 }
@@ -13,10 +17,15 @@ body.acrylic-mode .image-viewer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1rem;
+  padding: 0 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  height: 48px;
+  height: 35px;
+}
+
+[data-theme="dark"] .image-viewer-header {
+  background: #1e1e1e;
+  border-bottom: none;
 }
 
 body.acrylic-mode .image-viewer-header {
@@ -82,6 +91,10 @@ body.acrylic-mode .image-viewer-header {
   background: var(--bg-tertiary);
   user-select: none;
   position: relative;
+}
+
+[data-theme="dark"] .image-viewer-content {
+  background: #1e1e1e;
 }
 
 .image-viewer-content.move-cursor {

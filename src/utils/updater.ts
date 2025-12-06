@@ -566,14 +566,7 @@ function showChangelogModal(changelog: string, latestVersion?: string) {
   // 简单的麻蛋渲染
   const renderMarkdown = (md: string) => {
     md = md.replace(/##\s*\[未发布\][\s\S]*?(?=##\s*\[[\d.]+\]|$)/i, '');
-    
-    if (latestVersion) {
-      const versionPattern = new RegExp(`##\\s*\\[${latestVersion.replace('v', '')}\\][\\s\\S]*?(?=##\\s*\\[|$)`, 'i');
-      const match = md.match(versionPattern);
-      if (match) {
-        md = match[0];
-      }
-    }
+    md = md.replace(/^#\s*更新日志\s*\n*/i, '');
     
     // 分割成行处理
     const lines = md.split('\n');
@@ -590,12 +583,12 @@ function showChangelogModal(changelog: string, latestVersion?: string) {
         if (inList) { html += '</ul>'; inList = false; }
         let text = trimmed.substring(4);
         text = processInlineMarkdown(text);
-        html += `<h3 style="margin-top: 12px; margin-bottom: 6px; font-size: 15px; font-weight: 600;">${text}</h3>`;
+        html += `<h3 style="margin-top: 12px; margin-bottom: 6px; font-size: 15px; font-weight: 600; color: var(--text-secondary, #666666);">${text}</h3>`;
       } else if (trimmed.startsWith('## ')) {
         if (inList) { html += '</ul>'; inList = false; }
         let text = trimmed.substring(3);
         text = processInlineMarkdown(text);
-        html += `<h2 style="margin-top: 14px; margin-bottom: 7px; font-size: 16px; font-weight: 600;">${text}</h2>`;
+        html += `<h2 style="margin-top: 20px; margin-bottom: 10px; padding-top: 16px; border-top: 1px solid var(--border-color, #e0e0e0); font-size: 16px; font-weight: 600; color: var(--accent-primary, #3b82f6);">${text}</h2>`;
       } else if (trimmed.startsWith('# ')) {
         if (inList) { html += '</ul>'; inList = false; }
         if (skipFirstH1) {

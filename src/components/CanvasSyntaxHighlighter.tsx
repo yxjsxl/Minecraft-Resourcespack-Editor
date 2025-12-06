@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useCallback } from 'react';
 
 interface CanvasSyntaxHighlighterProps {
   code: string;
@@ -149,6 +149,8 @@ export default function CanvasSyntaxHighlighter({
 }: CanvasSyntaxHighlighterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
+  const lastFontSizeRef = useRef<number>(fontSize);
+  const renderVersionRef = useRef<number>(0);
 
   // 计算tokens
   const tokens = useMemo(() => {
@@ -165,148 +167,171 @@ export default function CanvasSyntaxHighlighter({
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const colors = isDark ? TOKEN_COLORS : TOKEN_COLORS_LIGHT;
 
-  useEffect(() => {
+  // 核心渲染
+  const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !tokens) return;
 
-    const render = () => {
-      const ctx = canvas.getContext('2d', { alpha: true });
-      if (!ctx) return;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
 
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    
+    // 检查尺寸
+    if (rect.width === 0 || rect.height === 0) {
+      return;
+    }
+    
+    // 设置尺寸
+    const newWidth = Math.ceil(rect.width * dpr);
+    const newHeight = Math.ceil(rect.height * dpr);
+    
+    if (canvas.width !== newWidth || canvas.height !== newHeight) {
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+    }
+    
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // 清空画布
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    ctx.font = `${fontSize}px Consolas, Monaco, "Courier New", monospace`;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+
+    const paddingTop = 16;
+    const paddingLeft = 16;
+
+    // 计算行高
+    const lineHeightPx = fontSize * lineHeight;
+
+    // 计算可见区域
+    const startLine = Math.max(0, Math.floor((scrollTop) / lineHeightPx));
+    const endLine = Math.ceil((scrollTop + rect.height) / lineHeightPx) + 1;
+
+    // 绘制缩进引导线
+    const indentGuideColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+    const lines = code.split('\n');
+    // 测量空格宽度
+    const spaceWidth = ctx.measureText(' ').width;
+    
+    for (let lineNum = startLine; lineNum <= Math.min(endLine, lines.length - 1); lineNum++) {
+      const line = lines[lineNum];
+      const y = lineNum * lineHeightPx + paddingTop - scrollTop;
       
-      // 设置尺寸
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-
-      // 清空画布
-      ctx.clearRect(0, 0, rect.width, rect.height);
-
-      ctx.font = `${fontSize}px Consolas, Monaco, "Courier New", monospace`;
-      ctx.textBaseline = 'top';
-      ctx.textAlign = 'left';
-
-      const paddingTop = 16;
-      const paddingLeft = 16;
-
-      // 计算行高
-      const lineHeightPx = fontSize * lineHeight;
-
-      // 计算可见区域
-      const startLine = Math.max(0, Math.floor((scrollTop) / lineHeightPx));
-      const endLine = Math.ceil((scrollTop + rect.height) / lineHeightPx) + 1;
-
-      // 绘制缩进引导线
-      const indentGuideColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-      const lines = code.split('\n');
-      // 测量空格宽度
-      const spaceWidth = ctx.measureText(' ').width;
-      
-      for (let lineNum = startLine; lineNum <= Math.min(endLine, lines.length - 1); lineNum++) {
-        const line = lines[lineNum];
-        const y = lineNum * lineHeightPx + paddingTop - scrollTop;
-        
-        // 计算缩进级别
-        let indentLevel = 0;
-        for (let i = 0; i < line.length; i += 2) {
-          if (line[i] === ' ' && line[i + 1] === ' ') {
-            indentLevel++;
-          } else {
-            break;
-          }
-        }
-        
-        // 绘制缩进引导线
-        ctx.strokeStyle = indentGuideColor;
-        ctx.lineWidth = 1;
-        for (let i = 1; i <= indentLevel; i++) {
-          const x = paddingLeft + (i * 2 * spaceWidth) - scrollLeft;
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x, y + lineHeightPx);
-          ctx.stroke();
+      // 计算缩进级别
+      let indentLevel = 0;
+      for (let i = 0; i < line.length; i += 2) {
+        if (line[i] === ' ' && line[i + 1] === ' ') {
+          indentLevel++;
+        } else {
+          break;
         }
       }
+      
+      // 绘制缩进引导线
+      ctx.strokeStyle = indentGuideColor;
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= indentLevel; i++) {
+        const x = paddingLeft + (i * 2 * spaceWidth) - scrollLeft;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + lineHeightPx);
+        ctx.stroke();
+      }
+    }
 
-      const leadingSpace = (lineHeightPx - fontSize) / 2;
+    const leadingSpace = (lineHeightPx - fontSize) / 2;
 
-      // 遍历所有tokens并渲染
-      let currentLine = 0;
-      let currentX = 0;
+    // 遍历所有tokens并渲染
+    let currentLine = 0;
+    let currentX = 0;
 
-      for (const token of tokens) {
-        // 跳过不可见的行
-        if (token.line < startLine) {
-          if (token.value === '\n') {
-            currentLine++;
-            currentX = 0;
-          } else {
-            currentX += ctx.measureText(token.value).width;
-          }
-          continue;
-        }
-
-        // 超出范围停止渲染
-        if (token.line > endLine) break;
-
+    for (const token of tokens) {
+      // 跳过不可见的行
+      if (token.line < startLine) {
         if (token.value === '\n') {
           currentLine++;
           currentX = 0;
-          continue;
+        } else {
+          currentX += ctx.measureText(token.value).width;
         }
-
-        // 计算渲染位置
-        const y = token.line * lineHeightPx + paddingTop - scrollTop + leadingSpace;
-        const x = paddingLeft + currentX - scrollLeft;
-
-        // 绘制token
-        ctx.fillStyle = colors[token.type] || colors.text;
-        ctx.fillText(token.value, x, y);
-
-        // 更新x坐标 
-        currentX += ctx.measureText(token.value).width;
+        continue;
       }
-    };
+
+      // 超出范围停止渲染
+      if (token.line > endLine) break;
+
+      if (token.value === '\n') {
+        currentLine++;
+        currentX = 0;
+        continue;
+      }
+
+      // 计算渲染位置
+      const y = token.line * lineHeightPx + paddingTop - scrollTop + leadingSpace;
+      const x = paddingLeft + currentX - scrollLeft;
+
+      // 绘制token
+      ctx.fillStyle = colors[token.type] || colors.text;
+      ctx.fillText(token.value, x, y);
+
+      // 更新x坐标
+      currentX += ctx.measureText(token.value).width;
+    }
+  }, [tokens, scrollTop, scrollLeft, fontSize, lineHeight, colors, isDark, code]);
+
+  useEffect(() => {
+    if (!tokens) return;
+
+    renderVersionRef.current++;
+    const currentVersion = renderVersionRef.current;
 
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    animationFrameRef.current = requestAnimationFrame(render);
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [tokens, scrollTop, scrollLeft, fontSize, lineHeight, colors]);
+    const fontSizeChanged = lastFontSizeRef.current !== fontSize;
+    lastFontSizeRef.current = fontSize;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+    if (fontSizeChanged) {
+      const timeoutId = setTimeout(() => {
+        if (renderVersionRef.current === currentVersion) {
+          animationFrameRef.current = requestAnimationFrame(renderCanvas);
+        }
+      }, 20);
+      return () => {
+        clearTimeout(timeoutId);
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
+    } else {
+      // 正常渲染
+      animationFrameRef.current = requestAnimationFrame(renderCanvas);
+      return () => {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
     }
-  }, [fontSize]);
+  }, [tokens, scrollTop, scrollLeft, fontSize, lineHeight, colors, renderCanvas]);
 
   // 监听窗口大小变化
   useEffect(() => {
     const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
+      renderVersionRef.current++;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
+      animationFrameRef.current = requestAnimationFrame(renderCanvas);
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [renderCanvas]);
 
   if (language !== 'json' || !tokens) {
     return null;
